@@ -1,0 +1,7 @@
+logs/*.csv
+outputs/**/*.svg
+outputs/**/*.png
+outputs/**/*.pdf
+.Rhistory
+.RData
+.Ruserdata
