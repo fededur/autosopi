@@ -1,3 +1,4 @@
+ola$0114
 # SharePoint SVG Chart Framework
 
 This is a small R-based framework for generating SVG charts from Excel configuration files. It is designed for SharePoint-synced folders and does not require a server or Shiny.
