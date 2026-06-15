@@ -68,6 +68,10 @@ generic_ts_plot <- function(
   group_vals <- unique(as.character(df[[group_name]]))
   
   is_date <- inherits(df[[x_name]], c("Date", "POSIXct", "POSIXlt"))
+
+  if (is_date && x_freq == "auto") {
+    x_freq <- infer_date_frequency(df[[x_name]])
+  }
   
   # =========================
   # SORTING
@@ -449,9 +453,6 @@ generic_ts_plot <- function(
   expand_x <- if (forecast) 0.25 else 0 
   
   if (is_date) {  
-    
-    if (x_freq == "auto") x_freq <- "yearly"   
-    
     if (x_freq == "quarterly") {     
       
       start_date <- min(df[[x_name]], na.rm = TRUE)
@@ -549,4 +550,6 @@ generic_ts_plot <- function(
     )
   return(p)
 }
+
+plot_sopi <- generic_ts_plot
 

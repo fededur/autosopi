@@ -62,6 +62,26 @@ complete_palette <- function(categories, palette = NULL) {
   palette[categories]
 }
 
+infer_date_frequency <- function(x) {
+  dates <- sort(unique(as.Date(x[!is.na(x)])))
+
+  if (length(dates) < 2) {
+    return("yearly")
+  }
+
+  median_gap <- stats::median(as.numeric(diff(dates)), na.rm = TRUE)
+
+  if (is.na(median_gap)) {
+    "yearly"
+  } else if (median_gap <= 32) {
+    "monthly"
+  } else if (median_gap <= 95) {
+    "quarterly"
+  } else {
+    "yearly"
+  }
+}
+
 get_palette <- function(
     level = c("sector", "forecast_group"),
     sector = NULL,

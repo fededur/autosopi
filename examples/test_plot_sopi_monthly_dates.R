@@ -5,7 +5,7 @@ library(grid)
 library(svglite)
 
 source(file.path("R", "02_styling.R"))
-source(file.path("R", "plot_functions", "plot_sopi.R"))
+source(file.path("R", "plot_functions", "generic_ts_plot.R"))
 
 set.seed(123)
 
@@ -47,7 +47,7 @@ monthly_data <- expand.grid(
 
 seafood_palette <- complete_palette(unique(monthly_data$product), seafood_palette)
 
-p_monthly <- plot_sopi(
+p_monthly <- generic_ts_plot(
   data = monthly_data,
   x = "date",
   x_freq = "monthly",
@@ -64,7 +64,7 @@ p_monthly <- plot_sopi(
   col_position = "stacked"
 )
 
-p_monthly_forecast <- plot_sopi(
+p_monthly_forecast <- generic_ts_plot(
   data = monthly_data,
   x = "date",
   x_freq = "monthly",
