@@ -4,7 +4,7 @@ generic_ts_plot <- function(
     x_freq = c("auto", "yearly", "quarterly", "monthly"),
     y_line = NULL,
     y_col  = NULL,
-    group,
+    group = NULL,
     y_line_label = "Export revenue (NZ$)",
     y_col_label  = "Export volume (Tonnes)",
     x_label  = NULL,
@@ -55,7 +55,16 @@ generic_ts_plot <- function(
   
   y_col_name  <- if (is.null(y_col))  NULL else if (is.character(y_col))  y_col  else deparse(substitute(y_col))
   
-  group_name  <- if (is.character(group)) group else deparse(substitute(group))
+  group_name  <- if (is.null(group)) NULL else if (is.character(group)) group else deparse(substitute(group))
+
+  has_group <- !is.null(group_name)
+
+  if (!has_group) {
+    group_name <- ".generic_ts_group"
+    df[[group_name]] <- "All"
+  }
+
+  df[[x_name]] <- parse_flexible_date(df[[x_name]])
   
   has_line <- !is.null(y_line_name)
   
@@ -125,6 +134,7 @@ generic_ts_plot <- function(
   # =========================
   
   make_labels <- function(groups, type_label) {
+    if (!has_group) return(rep(type_label, length(groups)))
     if (is.null(label_lookup)) return(paste(groups, tolower(type_label)))
     mapped <- label_lookup[groups]
     mapped[is.na(mapped)] <- groups[is.na(mapped)]
@@ -137,7 +147,14 @@ generic_ts_plot <- function(
   
   align_palette <- function(pal, groups) {
     if (is.null(pal)) return(NULL)
-    pal[match(groups, names(pal))] |> setNames(groups)
+    aligned <- pal[match(groups, names(pal))]
+    missing <- is.na(aligned)
+
+    if (any(missing)) {
+      aligned[missing] <- scales::hue_pal()(sum(missing))
+    }
+
+    stats::setNames(aligned, groups)
   }
   
   

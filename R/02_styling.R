@@ -82,6 +82,59 @@ infer_date_frequency <- function(x) {
   }
 }
 
+parse_flexible_date <- function(x) {
+  if (inherits(x, "Date")) return(x)
+  if (inherits(x, c("POSIXct", "POSIXlt"))) return(as.Date(x))
+
+  if (is.numeric(x)) {
+    non_missing <- x[!is.na(x)]
+
+    if (
+      length(non_missing) > 0 &&
+        all(non_missing == floor(non_missing)) &&
+        all(non_missing >= 20000 & non_missing <= 100000)
+    ) {
+      return(as.Date(x, origin = "1899-12-30"))
+    }
+
+    return(x)
+  }
+
+  if (!is.character(x)) return(x)
+
+  values <- trimws(x)
+  values[values == ""] <- NA_character_
+  parsed <- rep(as.Date(NA), length(values))
+
+  formats <- c(
+    "%d/%m/%Y %H:%M:%S", "%d/%m/%y %H:%M:%S",
+    "%d-%m-%Y %H:%M:%S", "%d-%m-%y %H:%M:%S",
+    "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S", "%Y/%m/%dT%H:%M:%S",
+    "%m/%d/%Y %H:%M:%S", "%m/%d/%y %H:%M:%S",
+    "%d/%m/%Y", "%d/%m/%y",
+    "%d-%m-%Y", "%d-%m-%y",
+    "%d.%m.%Y", "%d.%m.%y",
+    "%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d",
+    "%d %b %Y", "%d %B %Y",
+    "%b %d %Y", "%B %d %Y",
+    "%m/%d/%Y", "%m/%d/%y"
+  )
+
+  for (fmt in formats) {
+    needs_parse <- is.na(parsed) & !is.na(values)
+    if (!any(needs_parse)) break
+
+    parsed[needs_parse] <- as.Date(values[needs_parse], format = fmt)
+  }
+
+  if (all(is.na(values) | !is.na(parsed))) {
+    return(parsed)
+  }
+
+  x
+}
+
 get_palette <- function(
     level = c("sector", "forecast_group"),
     sector = NULL,
