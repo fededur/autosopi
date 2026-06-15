@@ -33,7 +33,6 @@ After this, go back to the `START HERE` sheet. You should see these buttons:
 - `Refresh Data Functions`
 - `Build R Config`
 - `Export Chart Config`
-- `Set Project Folder`
 - `Refresh Plot List`
 
 ## Normal Use
@@ -44,16 +43,15 @@ Use this process for each SOPI release.
 2. Go to `Release Setup`.
 3. Set the release year, release round, forecast years, output folder, and chart size.
 4. Go back to `START HERE`.
-5. If the workbook is not saved inside the SOPI Graphs project folder, click `Set Project Folder` and choose the folder that contains `R`, `config`, `metadata`, and `run_charts.R`.
-6. Click `Refresh Plot Functions`.
-7. Click `Refresh Data Functions`.
-8. Click `Add Data Source` for each dataset you need.
-9. Click `Add Chart` for each chart you want.
-10. Click `Refresh Plot List` to see the current plots by sector on `START HERE`.
-11. Use `Delete Chart` or `Delete Data Source` to remove anything you do not want in the release.
-12. Click `Build R Config`.
-13. Check the `Validation` sheet.
-14. If there are no errors, click `Export Chart Config`.
+5. Click `Refresh Plot Functions`.
+6. Click `Refresh Data Functions`.
+7. Click `Add Data Source` for each dataset you need.
+8. Click `Add Chart` for each chart you want.
+9. Click `Refresh Plot List` to see the current plots by sector on `START HERE`.
+10. Use `Delete Chart` or `Delete Data Source` to remove anything you do not want in the release.
+11. Click `Build R Config`.
+12. Check the `Validation` sheet.
+13. If there are no errors, click `Export Chart Config`.
 
 The exported file will be saved here:
 
@@ -164,7 +162,7 @@ R/data_functions/
 
 These buttons update the dropdown lists used by the builder. `Refresh Data Functions` also reads any `@sopi_fields` lines and stores the known output fields in the `Lists` sheet.
 
-If either refresh button says it loaded `0` functions, click `Set Project Folder` and make sure the selected folder is the main SOPI Graphs project folder.
+If either refresh button says it loaded `0` functions, first make sure you imported the latest `ConfigBuilder.bas` and ran `InstallBuilderButtons`. The builder expects the workbook to be saved inside the project folder, usually somewhere under `config`.
 
 ## If Something Goes Wrong
 

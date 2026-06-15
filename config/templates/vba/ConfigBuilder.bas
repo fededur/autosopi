@@ -19,8 +19,6 @@ Private Const TECH_DATA_ARGS As String = "data_args"
 Private Const TECH_RUN_CONTROL As String = "run_control"
 Private Const TECH_PALETTES As String = "palettes"
 
-Private mProjectRootPath As String
-
 Public Sub InstallBuilderButtons()
     Dim ws As Worksheet
     Set ws = ThisWorkbook.Worksheets(START_SHEET)
@@ -35,36 +33,11 @@ Public Sub InstallBuilderButtons()
     AddButton ws, "Refresh Data Functions", "RefreshDataFunctionsFromR", 490, 250, 170, 28
     AddButton ws, "Build R Config", "BuildRConfig", 670, 250, 130, 28
     AddButton ws, "Export Chart Config", "ExportChartConfigXlsx", 810, 250, 150, 28
-    AddButton ws, "Set Project Folder", "SetProjectFolder", 20, 290, 150, 28
-    AddButton ws, "Delete Chart", "DeleteChartWizard", 180, 290, 130, 28
-    AddButton ws, "Delete Data Source", "DeleteDataSourceWizard", 320, 290, 150, 28
-    AddButton ws, "Refresh Plot List", "RefreshStartHerePlotList", 480, 290, 150, 28
+    AddButton ws, "Delete Chart", "DeleteChartWizard", 20, 290, 130, 28
+    AddButton ws, "Delete Data Source", "DeleteDataSourceWizard", 160, 290, 150, 28
+    AddButton ws, "Refresh Plot List", "RefreshStartHerePlotList", 320, 290, 150, 28
 
     MsgBox "Buttons installed on START HERE.", vbInformation
-End Sub
-
-Public Sub SetProjectFolder()
-    Dim selectedPath As String
-    Dim rootPath As String
-    Dim defaultPath As String
-
-    If Len(mProjectRootPath) > 0 Then
-        defaultPath = mProjectRootPath
-    Else
-        defaultPath = ThisWorkbook.Path
-    End If
-
-    selectedPath = PromptValue("Project Folder", "Enter the SOPI Graphs project folder. It should contain the R and config folders.", defaultPath)
-    If Len(selectedPath) = 0 Then Exit Sub
-
-    rootPath = FindProjectRootFrom(selectedPath)
-    If Len(rootPath) = 0 Then
-        MsgBox "That folder does not look like the SOPI Graphs project folder. Choose the folder that contains R, config, metadata, and run_charts.R.", vbExclamation
-        Exit Sub
-    End If
-
-    mProjectRootPath = rootPath
-    MsgBox "Project folder set to:" & vbCrLf & rootPath, vbInformation
 End Sub
 
 Public Sub ShowChartWizard()
@@ -1689,87 +1662,19 @@ Private Function ConfigRootPath() As String
 End Function
 
 Private Function ProjectRootPath() As String
-    Dim rootPath As String
-    Dim configuredPath As String
+    Dim p As String
+    Dim marker As String
+    Dim pos As Long
 
-    If Len(mProjectRootPath) > 0 Then
-        ProjectRootPath = mProjectRootPath
-        Exit Function
-    End If
+    p = ThisWorkbook.Path
+    marker = "\config\"
+    pos = InStr(1, LCase$(p), marker, vbTextCompare)
 
-    rootPath = FindProjectRootFrom(ThisWorkbook.Path)
-    If Len(rootPath) = 0 Then
-        configuredPath = GetConfiguredProjectRoot()
-        If Len(configuredPath) > 0 Then rootPath = FindProjectRootFrom(configuredPath)
-    End If
-
-    If Len(rootPath) = 0 Then
-        configuredPath = PromptValue("Project Root", "Enter the SOPI Graphs project folder. It should contain the R and config folders.", ThisWorkbook.Path)
-        If Len(configuredPath) > 0 Then rootPath = FindProjectRootFrom(configuredPath)
-    End If
-
-    If Len(rootPath) > 0 Then
-        mProjectRootPath = rootPath
-        ProjectRootPath = mProjectRootPath
+    If pos > 0 Then
+        ProjectRootPath = Left$(p, pos - 1)
     Else
-        ProjectRootPath = ThisWorkbook.Path
+        ProjectRootPath = p
     End If
-End Function
-
-Private Function FindProjectRootFrom(ByVal startPath As String) As String
-    Dim fso As Object
-    Dim candidate As String
-
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    candidate = CleanText(startPath)
-    If Len(candidate) = 0 Then Exit Function
-
-    If fso.FileExists(candidate) Then candidate = fso.GetParentFolderName(candidate)
-    If Not fso.FolderExists(candidate) Then Exit Function
-
-    Do While Len(candidate) > 0
-        If ProjectRootLooksValid(candidate) Then
-            FindProjectRootFrom = candidate
-            Exit Function
-        End If
-
-        If fso.GetParentFolderName(candidate) = candidate Then Exit Do
-        candidate = fso.GetParentFolderName(candidate)
-    Loop
-End Function
-
-Private Function ProjectRootLooksValid(ByVal folderPath As String) As Boolean
-    Dim fso As Object
-
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    ProjectRootLooksValid = _
-        fso.FolderExists(folderPath & "\R\plot_functions") And _
-        fso.FolderExists(folderPath & "\R\data_functions") And _
-        fso.FolderExists(folderPath & "\config")
-End Function
-
-Private Function GetConfiguredProjectRoot() As String
-    Dim ws As Worksheet
-    Dim r As Long
-    Dim last As Long
-    Dim key As String
-    Dim value As String
-
-    If Not BuilderSheetExists(RELEASE_SHEET) Then Exit Function
-
-    Set ws = ThisWorkbook.Worksheets(RELEASE_SHEET)
-    last = LastRow(ws, 1)
-
-    For r = 1 To last
-        key = LCase$(CleanText(ws.Cells(r, 1).Value))
-        If key = "project_root" Or key = "project root" Or key = "project folder" Then
-            value = CleanText(ws.Cells(r, 2).Value)
-            If Len(value) > 0 Then
-                GetConfiguredProjectRoot = value
-                Exit Function
-            End If
-        End If
-    Next r
 End Function
 
 Private Function CleanPathPart(ByVal value As String) As String

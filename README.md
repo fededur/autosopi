@@ -129,7 +129,6 @@ The main buttons are:
 - `Refresh Data Functions`
 - `Build R Config`
 - `Export Chart Config`
-- `Set Project Folder`
 - `Refresh Plot List`
 
 The builder can list:
