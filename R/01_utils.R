@@ -72,3 +72,99 @@ call_named_function <- function(function_name, args) {
 
   do.call(fn, args)
 }
+
+read_metadata <- function(path, sheet = 1) {
+  raw <- read_xlsx(path, sheet = sheet)
+  
+  clean <- raw %>%
+    janitor::clean_names() %>%
+    mutate(
+      include = coalesce(as.logical(include), TRUE),
+      level = case_when(
+        forecast_group_key == "Total" ~ "grand_total",
+        str_detect(forecast_group_key, regex("^Total ", ignore_case = TRUE)) ~ "sector_total",
+        TRUE ~ "forecast_group"
+      )
+    )
+  
+  return(clean)
+}
+
+build_color_palette <- function(categories, colors, other_category = NULL, other_color = NULL) {
+  
+  if (length(categories) != length(colors)) {
+    warning(sprintf("Length mismatch: %d categories but %d colors provided.", length(categories), length(colors)))
+  }
+  
+  palette <- setNames(colors[seq_along(categories)], categories)
+  
+  if (!is.null(other_category) && !is.null(other_color)) {
+    palette[other_category] <- other_color
+  }
+  
+  return(palette)
+}
+
+get_palette <- function(
+    level = c("sector", "forecast_group"),
+    sector = NULL,
+    ref = c("label", "key"),
+    metadata_table,
+    include_total = FALSE) {
+  
+  library(dplyr)
+  library(stringr)
+  library(rlang)
+  
+  level <- match.arg(level)
+  
+  ref <- match.arg(ref)
+  
+  df <- metadata_table
+  
+  if (!is.null(sector)) {
+    df <- df %>% filter(sector_key %in% sector)
+  }
+  
+  label_col <- switch(level,
+                      sector = if (ref == "label") "sector_label" else "sector_key",
+                      forecast_group = if (ref == "label") "forecast_group_label" else "forecast_group_key"
+  )
+  
+  color_col <- switch(level,
+                      sector = "sector_color",
+                      forecast_group = "forecast_group_color"
+  )
+  
+  if (level == "sector") {
+    sector_total <- df %>% filter(level == "sector_total")
+    df <- sector_total %>%
+      distinct(across(c(sector_key, sector_label, sector_color))) %>%
+      transmute(label = .data[[label_col]], color = .data[[color_col]])
+    
+    if (include_total) {
+      grand_total <- metadata_table %>% filter(level == "grand_total")
+      grand <- grand_total %>%
+        transmute(label = .data[[label_col]], color = .data[[color_col]])
+      df <- bind_rows(grand, df)
+    }
+    
+  } else if (level == "forecast_group") {
+    fg <- df %>% filter(level == "forecast_group")
+    
+    if (include_total) {
+      st <- df %>% filter(level == "sector_total")
+      fg <- bind_rows(st, fg)
+    }
+    
+    df <- fg %>%
+      transmute(label = .data[[label_col]], color = .data[[color_col]])
+  }
+  
+  if (!include_total) {
+    df <- df %>% filter(!str_detect(tolower(label), "total"))
+  }
+  
+  pal <- setNames(df$color, df$label)
+  pal[!duplicated(names(pal))]
+}
