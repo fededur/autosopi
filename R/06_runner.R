@@ -73,6 +73,7 @@ run_charts <- function(run_plan, config, project_root) {
 clean_plot_args <- function(args, config, project_root, data = NULL, metadata_resource = NULL) {
   sector <- args$sector
   group <- args$group
+  use_metadata_palette <- isTRUE(args$use_metadata_palette)
 
   framework_only <- c(
     "active", "sector", "plot_id", "plot_function", "data_source_id", "output_file",
@@ -85,6 +86,13 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
   )
 
   args <- args[setdiff(names(args), framework_only)]
+  args$use_metadata_palette <- NULL
+
+  if (use_metadata_palette) {
+    args$palette <- NULL
+    args$palette_fill <- NULL
+    args$palette_line <- NULL
+  }
 
   args$palette <- resolve_palette_arg(args$palette, config)
   args$palette_fill <- resolve_palette_arg(args$palette_fill, config)

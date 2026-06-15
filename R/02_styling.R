@@ -309,6 +309,15 @@ get_forecast_labels <- function(
   labels[!duplicated(names(labels))]
 }
 
+is_varied_palette <- function(palette, min_colors = 2) {
+  if (is.null(palette) || length(palette) == 0) {
+    return(FALSE)
+  }
+
+  colors <- unique(stats::na.omit(as.character(unname(palette))))
+  length(colors[nzchar(colors)]) >= min_colors
+}
+
 complete_labels <- function(categories, labels = NULL) {
   categories <- unique(as.character(categories))
 
@@ -335,20 +344,41 @@ style_from_metadata <- function(
     include_total = FALSE) {
   if (
     is.null(metadata_resource) ||
-      is.null(metadata_resource$forecast_palette) ||
+      (
+        is.null(metadata_resource$forecast_palette) &&
+          is.null(metadata_resource$metadata)
+      ) ||
       is.null(sector) ||
       is.na(sector)
   ) {
     return(list(palette = NULL, labels = NULL))
   }
 
-  palette <- get_forecast_palette(
-    sector = sector,
-    forecast_palette_table = metadata_resource$forecast_palette,
-    ref = ref,
-    fill = fill,
-    include_total = include_total
-  )
+  palette <- NULL
+  if (!is.null(metadata_resource$forecast_palette)) {
+    palette <- get_forecast_palette(
+      sector = sector,
+      forecast_palette_table = metadata_resource$forecast_palette,
+      ref = ref,
+      fill = fill,
+      include_total = include_total
+    )
+  }
+
+  metadata_palette <- NULL
+  if (!is.null(metadata_resource$metadata)) {
+    metadata_palette <- get_palette(
+      level = "forecast_group",
+      sector = sector,
+      ref = ref,
+      metadata_table = metadata_resource$metadata,
+      include_total = include_total
+    )
+  }
+
+  if (!is_varied_palette(palette) && is_varied_palette(metadata_palette)) {
+    palette <- metadata_palette
+  }
 
   labels <- get_forecast_labels(
     sector = sector,
@@ -357,6 +387,19 @@ style_from_metadata <- function(
     fill = fill,
     include_total = include_total
   )
+
+  if (is.null(labels) && !is.null(metadata_resource$metadata)) {
+    label_key <- if (ref == "label") "forecast_group_label" else "forecast_group_key"
+
+    label_rows <- metadata_resource$metadata |>
+      dplyr::filter(.data$sector_key %in% sector) |>
+      dplyr::filter(.data$level == "forecast_group") |>
+      dplyr::transmute(name = .data[[label_key]], label = .data$forecast_group_label) |>
+      dplyr::filter(!is.na(.data$name), nzchar(.data$name), !is.na(.data$label), nzchar(.data$label))
+
+    labels <- stats::setNames(label_rows$label, label_rows$name)
+    labels <- labels[!duplicated(names(labels))]
+  }
 
   if (!is.null(categories)) {
     palette <- complete_palette(categories, palette)
@@ -416,6 +459,21 @@ palette_from_forecast_metadata <- function(
     fill = fill,
     include_total = include_total
   )
+
+  if (!is_varied_palette(pal) && "metadata" %in% readxl::excel_sheets(path)) {
+    metadata <- read_metadata(path, sheet = "metadata")
+    metadata_pal <- get_palette(
+      level = "forecast_group",
+      sector = sector,
+      ref = ref,
+      metadata_table = metadata,
+      include_total = include_total
+    )
+
+    if (is_varied_palette(metadata_pal)) {
+      pal <- metadata_pal
+    }
+  }
 
   if (!is.null(categories)) {
     pal <- complete_palette(categories, pal)
