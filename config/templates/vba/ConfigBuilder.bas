@@ -29,8 +29,10 @@ Public Sub InstallBuilderButtons()
 
     AddButton ws, "Add Chart", "ShowChartWizard", 20, 250, 130, 28
     AddButton ws, "Add Data Source", "ShowDataSourceWizard", 160, 250, 140, 28
-    AddButton ws, "Build R Config", "BuildRConfig", 310, 250, 130, 28
-    AddButton ws, "Export Chart Config", "ExportChartConfigXlsx", 450, 250, 150, 28
+    AddButton ws, "Refresh Plot Functions", "RefreshPlotFunctionsFromR", 310, 250, 170, 28
+    AddButton ws, "Refresh Data Functions", "RefreshDataFunctionsFromR", 490, 250, 170, 28
+    AddButton ws, "Build R Config", "BuildRConfig", 670, 250, 130, 28
+    AddButton ws, "Export Chart Config", "ExportChartConfigXlsx", 810, 250, 150, 28
 
     MsgBox "Buttons installed on START HERE.", vbInformation
 End Sub
@@ -54,10 +56,11 @@ Public Sub ShowChartWizard()
     plotId = PromptValue("Plot ID", "Enter a unique plot ID.", LCase$(Replace(sectorName, " ", "_")) & "_fig_1")
     If Len(plotId) = 0 Then Exit Sub
 
-    plotFunction = PromptValue("Plot Function", "Enter plot function.", "generic_ts_plot")
+    RefreshPlotFunctionsFromR False
+    plotFunction = PromptSelectFromList("Plot Function", GetListValues("Lists", "Plot Functions"))
     If Len(plotFunction) = 0 Then Exit Sub
 
-    dataSourceId = PromptValue("Data Source ID", "Enter an existing data source ID.", plotId)
+    dataSourceId = PromptSelectFromList("Data Source ID", GetListValues(DATA_SOURCES_SHEET, "Data Source ID"))
     If Len(dataSourceId) = 0 Then Exit Sub
 
     outputFile = PromptValue("Output File", "Enter SVG output filename.", plotId & ".svg")
@@ -119,7 +122,7 @@ Public Sub ShowDataSourceWizard()
     dataSourceId = PromptValue("Data Source ID", "Enter a unique data source ID.", "")
     If Len(dataSourceId) = 0 Then Exit Sub
 
-    sourceType = LCase$(PromptValue("Source Type", "Enter excel or function.", "excel"))
+    sourceType = LCase$(PromptSelectFromList("Source Type", CollectionFromArray(Array("excel", "function"))))
     If sourceType <> "excel" And sourceType <> "function" Then
         MsgBox "Source Type must be excel or function.", vbExclamation
         Exit Sub
@@ -129,10 +132,11 @@ Public Sub ShowDataSourceWizard()
         sourceRef = PromptValue("Source Ref", "Enter workbook path relative to project root.", "data/raw/manual_data.xlsx")
         If Len(sourceRef) = 0 Then Exit Sub
 
-        sourceSheet = PromptValue("Sheet", "Enter Excel sheet name.", "")
+        sourceSheet = PromptSelectFromList("Sheet", GetWorkbookSheetNames(sourceRef))
         If Len(sourceSheet) = 0 Then Exit Sub
     Else
-        dataFunction = PromptValue("Data Function", "Enter R data function name.", "")
+        RefreshDataFunctionsFromR False
+        dataFunction = PromptSelectFromList("Data Function", GetListValues("Lists", "Data Functions"))
         If Len(dataFunction) = 0 Then Exit Sub
     End If
 
@@ -148,6 +152,51 @@ Public Sub ShowDataSourceWizard()
     WriteRowValues ThisWorkbook.Worksheets(DATA_SOURCES_SHEET), values
 
     MsgBox "Data source added to the Data Sources sheet.", vbInformation
+End Sub
+
+Public Sub RefreshDataFunctionsFromR(Optional ByVal showMessage As Boolean = True)
+    Dim functions As Object
+    Dim folderPath As String
+    Dim ws As Worksheet
+    Dim colNum As Long
+    Dim rowNum As Long
+    Dim key As Variant
+
+    Set functions = CreateObject("Scripting.Dictionary")
+    folderPath = ProjectRootPath() & "\R\data_functions"
+
+    LoadFunctionNamesFromFolder folderPath, functions
+
+    Set ws = EnsureSheet("Lists")
+    colNum = EnsureHeaderColumn(ws, "Data Functions")
+    ws.Range(ws.Cells(2, colNum), ws.Cells(ws.Rows.Count, colNum)).ClearContents
+
+    rowNum = 2
+    For Each key In functions.Keys
+        ws.Cells(rowNum, colNum).Value = CStr(key)
+        rowNum = rowNum + 1
+    Next key
+
+    If showMessage Then
+        MsgBox "Loaded " & functions.Count & " data function(s) from " & folderPath, vbInformation
+    End If
+End Sub
+
+Public Sub BuilderFillComboWithExcelSheets(ByVal combo As Object, ByVal sourceRef As String)
+    Dim sheetNames As Collection
+    Dim i As Long
+
+    combo.Clear
+    Set sheetNames = GetWorkbookSheetNames(sourceRef)
+
+    For i = 1 To sheetNames.Count
+        combo.AddItem CStr(sheetNames(i))
+    Next i
+End Sub
+
+Public Sub BuilderFillComboWithDataFunctions(ByVal combo As Object)
+    RefreshDataFunctionsFromR False
+    BuilderFillComboFromColumn combo, "Lists", "Data Functions"
 End Sub
 
 Public Function BuilderSheetExists(ByVal sheetName As String) As Boolean
@@ -221,6 +270,202 @@ Public Sub BuilderFillComboFromArray(ByVal combo As Object, ByVal values As Vari
         combo.AddItem CStr(values(i))
     Next i
 End Sub
+
+Public Sub RefreshPlotFunctionsFromR(Optional ByVal showMessage As Boolean = True)
+    Dim functions As Object
+    Dim folderPath As String
+    Dim ws As Worksheet
+    Dim colNum As Long
+    Dim rowNum As Long
+    Dim key As Variant
+
+    Set functions = CreateObject("Scripting.Dictionary")
+    folderPath = ProjectRootPath() & "\R\plot_functions"
+
+    LoadFunctionNamesFromFolder folderPath, functions
+
+    Set ws = EnsureSheet("Lists")
+    colNum = EnsureHeaderColumn(ws, "Plot Functions")
+    ws.Range(ws.Cells(2, colNum), ws.Cells(ws.Rows.Count, colNum)).ClearContents
+
+    rowNum = 2
+    For Each key In functions.Keys
+        ws.Cells(rowNum, colNum).Value = CStr(key)
+        rowNum = rowNum + 1
+    Next key
+
+    If showMessage Then
+        MsgBox "Loaded " & functions.Count & " plot function(s) from " & folderPath, vbInformation
+    End If
+End Sub
+
+Private Sub LoadFunctionNamesFromFolder(ByVal folderPath As String, ByVal functions As Object)
+    Dim fso As Object
+    Dim folder As Object
+    Dim file As Object
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(folderPath) Then Exit Sub
+
+    Set folder = fso.GetFolder(folderPath)
+    For Each file In folder.Files
+        If LCase$(fso.GetExtensionName(file.Name)) = "r" Then
+            LoadFunctionNamesFromFile CStr(file.Path), functions
+        End If
+    Next file
+End Sub
+
+Private Sub LoadFunctionNamesFromFile(ByVal filePath As String, ByVal functions As Object)
+    Dim fso As Object
+    Dim stream As Object
+    Dim lineText As String
+    Dim functionName As String
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set stream = fso.OpenTextFile(filePath, 1, False)
+
+    Do Until stream.AtEndOfStream
+        lineText = stream.ReadLine
+        functionName = ExtractRFunctionName(lineText)
+        If Len(functionName) > 0 Then
+            If Not functions.Exists(functionName) Then functions.Add functionName, True
+        End If
+    Loop
+
+    stream.Close
+End Sub
+
+Private Function ExtractRFunctionName(ByVal lineText As String) As String
+    Dim regex As Object
+    Dim matches As Object
+
+    Set regex = CreateObject("VBScript.RegExp")
+    regex.Pattern = "^([A-Za-z.][A-Za-z0-9._]*)\s*(<-|=)\s*function\s*\("
+    regex.IgnoreCase = False
+    regex.Global = False
+
+    If regex.Test(lineText) Then
+        Set matches = regex.Execute(lineText)
+        ExtractRFunctionName = CStr(matches(0).SubMatches(0))
+        Exit Function
+    End If
+
+    regex.Pattern = "^(plot[A-Za-z0-9._]*|[A-Za-z0-9._]*_plot)\s*(<-|=)\s*([A-Za-z.][A-Za-z0-9._]*)\s*$"
+    If regex.Test(lineText) Then
+        Set matches = regex.Execute(lineText)
+        ExtractRFunctionName = CStr(matches(0).SubMatches(0))
+        Exit Function
+    End If
+
+    ExtractRFunctionName = ""
+End Function
+
+Private Function GetListValues(ByVal sheetName As String, ByVal headerName As String) As Collection
+    Dim values As Collection
+    Dim ws As Worksheet
+    Dim colNum As Long
+    Dim rowNum As Long
+    Dim last As Long
+    Dim value As String
+
+    Set values = New Collection
+    If Not BuilderSheetExists(sheetName) Then
+        Set GetListValues = values
+        Exit Function
+    End If
+
+    Set ws = ThisWorkbook.Worksheets(sheetName)
+    colNum = BuilderHeaderColumn(ws, headerName)
+    If colNum = 0 Then
+        Set GetListValues = values
+        Exit Function
+    End If
+
+    last = LastRow(ws, colNum)
+    For rowNum = 2 To last
+        value = CleanText(ws.Cells(rowNum, colNum).Value)
+        If Len(value) > 0 Then values.Add value
+    Next rowNum
+
+    Set GetListValues = values
+End Function
+
+Private Function CollectionFromArray(ByVal values As Variant) As Collection
+    Dim result As Collection
+    Dim i As Long
+
+    Set result = New Collection
+    For i = LBound(values) To UBound(values)
+        result.Add CStr(values(i))
+    Next i
+
+    Set CollectionFromArray = result
+End Function
+
+Private Function GetWorkbookSheetNames(ByVal sourceRef As String) As Collection
+    Dim names As Collection
+    Dim wb As Workbook
+    Dim fullPath As String
+    Dim i As Long
+    Dim oldScreenUpdating As Boolean
+
+    Set names = New Collection
+    fullPath = BuilderResolvePath(sourceRef)
+
+    If Len(fullPath) = 0 Or Len(Dir(fullPath)) = 0 Then
+        Set GetWorkbookSheetNames = names
+        Exit Function
+    End If
+
+    On Error GoTo CleanFail
+    oldScreenUpdating = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    Set wb = Workbooks.Open(Filename:=fullPath, UpdateLinks:=False, ReadOnly:=True, AddToMru:=False)
+    For i = 1 To wb.Worksheets.Count
+        names.Add wb.Worksheets(i).Name
+    Next i
+
+CleanExit:
+    If Not wb Is Nothing Then wb.Close SaveChanges:=False
+    Application.ScreenUpdating = oldScreenUpdating
+    Set GetWorkbookSheetNames = names
+    Exit Function
+
+CleanFail:
+    Resume CleanExit
+End Function
+
+Private Function PromptSelectFromList(ByVal title As String, ByVal values As Collection) As String
+    Dim prompt As String
+    Dim i As Long
+    Dim answer As String
+    Dim index As Long
+
+    If values.Count = 0 Then
+        PromptSelectFromList = PromptValue(title, "No values found. Type a value.", "")
+        Exit Function
+    End If
+
+    prompt = "Select " & title & " by number:" & vbCrLf & vbCrLf
+    For i = 1 To values.Count
+        prompt = prompt & i & ". " & CStr(values(i)) & vbCrLf
+    Next i
+
+    answer = PromptValue(title, prompt, "1")
+    If Len(answer) = 0 Then
+        PromptSelectFromList = ""
+    ElseIf IsNumeric(answer) Then
+        index = CLng(answer)
+        If index >= 1 And index <= values.Count Then
+            PromptSelectFromList = CStr(values(index))
+        Else
+            PromptSelectFromList = ""
+        End If
+    Else
+        PromptSelectFromList = answer
+    End If
+End Function
 
 Public Function BuilderNextSortOrder(ByVal sectorName As String) As Long
     Dim ws As Worksheet
@@ -317,7 +562,7 @@ Public Sub BuilderFillCombosWithExcelHeaders(ByVal dataSourceId As String, Param
     End If
 
     Application.ScreenUpdating = False
-    Set wb = Workbooks.Open(Filename:=fullPath, ReadOnly:=True)
+    Set wb = Workbooks.Open(Filename:=fullPath, UpdateLinks:=False, ReadOnly:=True, AddToMru:=False)
     Set ws = wb.Worksheets(sourceSheet)
 
     If Len(sourceRange) > 0 Then
@@ -743,6 +988,23 @@ Private Function HeaderMap(ByVal ws As Worksheet, ByVal headerRow As Long) As Ob
     Next c
 
     Set HeaderMap = dict
+End Function
+
+Private Function EnsureHeaderColumn(ByVal ws As Worksheet, ByVal headerName As String) As Long
+    Dim colNum As Long
+
+    colNum = BuilderHeaderColumn(ws, headerName)
+    If colNum > 0 Then
+        EnsureHeaderColumn = colNum
+        Exit Function
+    End If
+
+    colNum = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    If Len(CleanText(ws.Cells(1, colNum).Value)) > 0 Then colNum = colNum + 1
+
+    ws.Cells(1, colNum).Value = headerName
+    ws.Cells(1, colNum).Font.Bold = True
+    EnsureHeaderColumn = colNum
 End Function
 
 Private Function CellByHeader(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal map As Object, ByVal headerName As String) As Variant

@@ -1,79 +1,57 @@
-# AutoSOPI Config Builder Prototype
+# SOPI Graphs Config Builder
 
-This folder contains a first VBA-based approach for making chart configuration easier for non-R users.
+This workbook helps you create SOPI chart configuration files without editing R code.
 
-## Files
+Use it when you want to say:
 
-`config_builder_template.xlsx`
-: Friendly workbook layout. Users edit sheets such as `Release Setup`, `Charts`, `Data Sources`, `Data Args`, `Sector Defaults`, `Chart Defaults`, and `Run Control`.
+- which SOPI release you are working on
+- which sectors are included
+- where the chart data comes from
+- which charts should be produced
+- where the final SVG files should be saved
 
-`vba/ConfigBuilder.bas`
-: VBA module that builds the technical config sheets used by R and exports a release-specific `chart_config.xlsx`.
+## One-Time Setup
 
-`vba/frmChartWizard.frm`
-: UserForm for adding a chart by clicking through sector, data source, plot function, data fields, labels, forecast settings, and palette settings.
-
-`vba/frmDataSourceWizard.frm`
-: UserForm for adding Excel-backed or R-function-backed data sources.
-
-## Setup
+Do this once when creating a new macro-enabled builder workbook.
 
 1. Open `config_builder_template.xlsx`.
 2. Save it as `config_builder.xlsm`.
-3. Press `Alt + F11` to open the VBA editor.
-4. Use `File > Import File...` and import these files:
+3. Press `Alt + F11`.
+4. In the VBA editor, choose `File > Import File...`.
+5. Import this file only:
    - `vba/ConfigBuilder.bas`
-   - `vba/frmChartWizard.frm`
-   - `vba/frmDataSourceWizard.frm`
-5. Save the workbook.
-6. Run the macro `InstallBuilderButtons` once.
+6. Save the workbook.
+7. Run the macro called `InstallBuilderButtons`.
 
-Do not copy and paste the text from a `.frm` file into a code module. The `.frm` file contains both form layout text and VBA code, so it must be imported as a file through `File > Import File...`.
-
-After that, the `START HERE` sheet will have buttons for:
+After this, go back to the `START HERE` sheet. You should see these buttons:
 
 - `Add Chart`
 - `Add Data Source`
+- `Refresh Plot Functions`
+- `Refresh Data Functions`
 - `Build R Config`
 - `Export Chart Config`
 
-## User Workflow
+## Normal Use
 
-1. Edit `Release Setup`.
-2. Click `Add Data Source` if the data source is not already listed.
-3. Click `Add Chart`.
-4. Select the sector, plot function, and data source.
-5. Click `Load Fields` to populate the field dropdowns from the selected Excel data source.
-6. Select the x field, group field, column value, line value, labels, and chart options.
-7. Click `Save Chart`.
-8. Click `Build R Config`.
-9. Check `Validation`.
-10. Click `Export Chart Config`.
+Use this process for each SOPI release.
 
-You can still edit the friendly sheets directly if that is faster for bulk updates.
+1. Open the builder workbook.
+2. Go to `Release Setup`.
+3. Set the release year, release round, forecast years, output folder, and chart size.
+4. Go back to `START HERE`.
+5. Click `Refresh Plot Functions`.
+6. Click `Refresh Data Functions`.
+7. Click `Add Data Source` for each dataset you need.
+8. Click `Add Chart` for each chart you want.
+9. Click `Build R Config`.
+10. Check the `Validation` sheet.
+11. If there are no errors, click `Export Chart Config`.
 
-## Troubleshooting VBA Imports
-
-If Excel says:
-
-```text
-The form class contained in ... is not supported in VBE. The file can't be loaded.
-```
-
-make sure you are importing the latest `.frm` files from this folder. Excel VBA UserForms must start with the UserForm class GUID:
+The exported file will be saved here:
 
 ```text
-Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F}
-```
-
-Older draft form files used a `VB.Form` declaration, which Excel VBE rejects.
-
-If the code window shows lines such as `VERSION 5.00` or `Begin {C62A69F0...}`, the form was pasted into a module instead of imported. Remove that pasted module and import the `.frm` file instead.
-
-The export macro writes:
-
-```text
-config/releases/<release_year>/<release_round>/chart_config.xlsx
+config/releases/<year>/<June or December>/chart_config.xlsx
 ```
 
 For example:
@@ -82,25 +60,100 @@ For example:
 config/releases/2026/June/chart_config.xlsx
 ```
 
-## Running A Generated Config
+## Adding A Data Source
 
-From R:
+Click `Add Data Source`.
+
+Choose one of these source types:
+
+`excel`
+: Use this when the data is in an Excel workbook. The builder asks for the workbook path, then shows the available sheet names so you can select one.
+
+`function`
+: Use this when R creates or prepares the data. The builder shows the available R data functions from the project.
+
+Use clear names for data sources, for example:
+
+```text
+seafood_fig_1_data
+meat_wool_exports
+forestry_ranked_markets
+```
+
+## Adding A Chart
+
+Click `Add Chart`.
+
+The builder will ask you to select or enter:
+
+- sector
+- plot ID
+- plot function
+- data source
+- output SVG filename
+- x/date/year field
+- group/category field, if needed
+- column value field, if needed
+- line value field, if needed
+- axis labels
+- break settings
+
+When choosing the data source, the builder lists the data sources already added in the `Data Sources` sheet.
+
+## What The Refresh Buttons Do
+
+Click `Refresh Plot Functions` when new chart functions have been added to:
+
+```text
+R/plot_functions/
+```
+
+Click `Refresh Data Functions` when new data functions have been added to:
+
+```text
+R/data_functions/
+```
+
+These buttons update the dropdown lists used by the builder.
+
+## If Something Goes Wrong
+
+If Excel says `Invalid outside procedure`, check whether a form file was pasted or imported into the wrong place.
+
+In the VBA editor:
+
+1. Look at the project list on the left.
+2. Delete any failed form modules called `frmChartWizard` or `frmDataSourceWizard`.
+3. Delete any normal module that starts with lines like `VERSION 5.00` or `Begin {C62A69F0...`.
+4. Import `vba/ConfigBuilder.bas` only.
+5. Run `Debug > Compile VBAProject`.
+
+The current builder does not need `.frm` files. It uses the buttons installed by `ConfigBuilder.bas`.
+
+If Excel asks how to import the module, use:
+
+```text
+File > Import File...
+```
+
+Do not copy and paste code manually. Import the `.bas` file.
+
+If you see this text inside a normal module:
+
+```text
+VERSION 5.00
+Begin {C62A69F0...
+```
+
+delete that module. It is form layout text, not normal VBA code.
+
+## Running The Charts
+
+After exporting the config, run the charts from R:
 
 ```r
 Sys.setenv(AUTOSOPI_CONFIG = "config/releases/2026/June/chart_config.xlsx")
 source("run_charts.R")
 ```
 
-Or from a terminal:
-
-```sh
-Rscript run_charts.R config/releases/2026/June/chart_config.xlsx
-```
-
-The old default still works:
-
-```r
-source("run_charts.R")
-```
-
-That uses `config/chart_config.xlsx`.
+Change the year and release round to match the config you exported.
