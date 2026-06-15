@@ -84,6 +84,12 @@ config/
     vba/ConfigBuilder.bas
       VBA module that builds technical config sheets and exports release configs.
 
+    vba/frmChartWizard.frm
+      UserForm for adding charts through dropdowns and buttons.
+
+    vba/frmDataSourceWizard.frm
+      UserForm for adding Excel or R-function data sources.
+
 data/
   raw/
     Excel data sources used by configured charts.
@@ -159,7 +165,7 @@ The file `config/templates/config_builder_template.xlsx` is a prototype for a fr
 - `Chart Defaults`
 - `Run Control`
 
-The VBA module `config/templates/vba/ConfigBuilder.bas` then creates the technical config sheets and exports:
+The VBA files in `config/templates/vba/` then create clickable forms, build the technical config sheets, and export:
 
 ```text
 config/releases/<release_year>/<release_round>/chart_config.xlsx
@@ -170,12 +176,20 @@ To try the prototype:
 1. Open `config/templates/config_builder_template.xlsx`.
 2. Save it as `config_builder.xlsm`.
 3. Open the VBA editor with `Alt + F11`.
-4. Import `config/templates/vba/ConfigBuilder.bas`.
+4. Import these VBA files:
+   - `config/templates/vba/ConfigBuilder.bas`
+   - `config/templates/vba/frmChartWizard.frm`
+   - `config/templates/vba/frmDataSourceWizard.frm`
 5. Save the workbook.
 6. Run `InstallBuilderButtons`.
-7. Edit the friendly sheets.
-8. Click `Build R Config`.
-9. Click `Export Chart Config`.
+7. Click `Add Data Source` to register Excel sheets or R data functions.
+8. Click `Add Chart` to select sector, plot type, data source, fields, labels, forecast settings, and palette settings.
+9. Click `Build R Config`.
+10. Click `Export Chart Config`.
+
+If a `.frm` file fails to import with "form class ... is not supported in VBE", use the latest files in `config/templates/vba/`. The form files must start with Excel's UserForm class GUID, not `VB.Form`.
+
+Do not paste `.frm` contents into a code module. Import `.frm` files using `File > Import File...`; otherwise Excel tries to compile form layout text such as `VERSION 5.00` as VBA code.
 
 ## Release Organisation
 

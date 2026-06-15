@@ -1,4 +1,3 @@
-Attribute VB_Name = "ConfigBuilder"
 Option Explicit
 
 Private Const START_SHEET As String = "START HERE"
@@ -28,10 +27,377 @@ Public Sub InstallBuilderButtons()
     ws.Buttons.Delete
     On Error GoTo 0
 
-    AddButton ws, "Build R Config", "BuildRConfig", 20, 250, 150, 28
-    AddButton ws, "Export Chart Config", "ExportChartConfigXlsx", 180, 250, 170, 28
+    AddButton ws, "Add Chart", "ShowChartWizard", 20, 250, 130, 28
+    AddButton ws, "Add Data Source", "ShowDataSourceWizard", 160, 250, 140, 28
+    AddButton ws, "Build R Config", "BuildRConfig", 310, 250, 130, 28
+    AddButton ws, "Export Chart Config", "ExportChartConfigXlsx", 450, 250, 150, 28
 
     MsgBox "Buttons installed on START HERE.", vbInformation
+End Sub
+
+Public Sub ShowChartWizard()
+    Dim sectorName As String
+    Dim plotId As String
+    Dim plotFunction As String
+    Dim dataSourceId As String
+    Dim outputFile As String
+    Dim xField As String
+    Dim groupField As String
+    Dim columnValue As String
+    Dim lineValue As String
+    Dim sortOrder As Variant
+    Dim values(1 To 25) As Variant
+
+    sectorName = PromptValue("Sector", "Enter sector name, for example Seafood.", "")
+    If Len(sectorName) = 0 Then Exit Sub
+
+    plotId = PromptValue("Plot ID", "Enter a unique plot ID.", LCase$(Replace(sectorName, " ", "_")) & "_fig_1")
+    If Len(plotId) = 0 Then Exit Sub
+
+    plotFunction = PromptValue("Plot Function", "Enter plot function.", "generic_ts_plot")
+    If Len(plotFunction) = 0 Then Exit Sub
+
+    dataSourceId = PromptValue("Data Source ID", "Enter an existing data source ID.", plotId)
+    If Len(dataSourceId) = 0 Then Exit Sub
+
+    outputFile = PromptValue("Output File", "Enter SVG output filename.", plotId & ".svg")
+    If Len(outputFile) = 0 Then Exit Sub
+
+    xField = PromptValue("X Field", "Enter x/date/year column name.", "year")
+    If Len(xField) = 0 Then Exit Sub
+
+    groupField = PromptValue("Group Field", "Enter group/category column name. Leave blank for no group.", "group")
+    columnValue = PromptValue("Column Value", "Enter column/bar value field. Leave blank if not needed.", "revenue")
+    lineValue = PromptValue("Line Value", "Enter line value field. Leave blank if not needed.", "volume")
+
+    If Len(columnValue) = 0 And Len(lineValue) = 0 Then
+        MsgBox "At least one value field is required.", vbExclamation
+        Exit Sub
+    End If
+
+    sortOrder = BuilderNextSortOrder(sectorName)
+
+    values(1) = True
+    values(2) = plotId
+    values(3) = sectorName
+    values(4) = plotFunction
+    values(5) = dataSourceId
+    values(6) = outputFile
+    values(7) = ""
+    values(8) = ""
+    values(9) = sortOrder
+    values(10) = xField
+    values(11) = "auto"
+    values(12) = groupField
+    values(13) = columnValue
+    values(14) = "Export revenue (NZ$ million)"
+    values(15) = "Revenue"
+    values(16) = lineValue
+    values(17) = "Export volume (tonnes)"
+    values(18) = "Volume"
+    values(19) = "dodge"
+    values(20) = True
+    values(21) = True
+    values(22) = 4
+    values(23) = 6
+    values(24) = 4
+    values(25) = 6
+
+    WriteRowValues ThisWorkbook.Worksheets(CHARTS_SHEET), values
+
+    MsgBox "Chart added to the Charts sheet.", vbInformation
+End Sub
+
+Public Sub ShowDataSourceWizard()
+    Dim dataSourceId As String
+    Dim sourceType As String
+    Dim sourceRef As String
+    Dim sourceSheet As String
+    Dim dataFunction As String
+    Dim values(1 To 8) As Variant
+
+    dataSourceId = PromptValue("Data Source ID", "Enter a unique data source ID.", "")
+    If Len(dataSourceId) = 0 Then Exit Sub
+
+    sourceType = LCase$(PromptValue("Source Type", "Enter excel or function.", "excel"))
+    If sourceType <> "excel" And sourceType <> "function" Then
+        MsgBox "Source Type must be excel or function.", vbExclamation
+        Exit Sub
+    End If
+
+    If sourceType = "excel" Then
+        sourceRef = PromptValue("Source Ref", "Enter workbook path relative to project root.", "data/raw/manual_data.xlsx")
+        If Len(sourceRef) = 0 Then Exit Sub
+
+        sourceSheet = PromptValue("Sheet", "Enter Excel sheet name.", "")
+        If Len(sourceSheet) = 0 Then Exit Sub
+    Else
+        dataFunction = PromptValue("Data Function", "Enter R data function name.", "")
+        If Len(dataFunction) = 0 Then Exit Sub
+    End If
+
+    values(1) = dataSourceId
+    values(2) = sourceType
+    values(3) = sourceRef
+    values(4) = sourceSheet
+    values(5) = ""
+    values(6) = dataFunction
+    values(7) = False
+    values(8) = ""
+
+    WriteRowValues ThisWorkbook.Worksheets(DATA_SOURCES_SHEET), values
+
+    MsgBox "Data source added to the Data Sources sheet.", vbInformation
+End Sub
+
+Public Function BuilderSheetExists(ByVal sheetName As String) As Boolean
+    Dim ws As Worksheet
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(sheetName)
+    On Error GoTo 0
+
+    BuilderSheetExists = Not ws Is Nothing
+End Function
+
+Public Function BuilderProjectRoot() As String
+    BuilderProjectRoot = ProjectRootPath()
+End Function
+
+Public Function BuilderCleanText(ByVal value As Variant) As String
+    BuilderCleanText = CleanText(value)
+End Function
+
+Public Function BuilderHeaderColumn(ByVal ws As Worksheet, ByVal headerName As String) As Long
+    Dim map As Object
+    Set map = HeaderMap(ws, 1)
+
+    If map.Exists(headerName) Then
+        BuilderHeaderColumn = CLng(map(headerName))
+    Else
+        BuilderHeaderColumn = 0
+    End If
+End Function
+
+Public Function BuilderLastRow(ByVal ws As Worksheet, ByVal colNum As Long) As Long
+    BuilderLastRow = LastRow(ws, colNum)
+End Function
+
+Public Sub BuilderFillComboFromColumn(ByVal combo As Object, ByVal sheetName As String, ByVal headerName As String, Optional ByVal includeBlank As Boolean = False)
+    Dim ws As Worksheet
+    Dim colNum As Long
+    Dim r As Long
+    Dim last As Long
+    Dim value As String
+    Dim seen As Object
+
+    combo.Clear
+    If includeBlank Then combo.AddItem ""
+    If Not BuilderSheetExists(sheetName) Then Exit Sub
+
+    Set ws = ThisWorkbook.Worksheets(sheetName)
+    colNum = BuilderHeaderColumn(ws, headerName)
+    If colNum = 0 Then Exit Sub
+
+    Set seen = CreateObject("Scripting.Dictionary")
+    last = LastRow(ws, colNum)
+
+    For r = 2 To last
+        value = CleanText(ws.Cells(r, colNum).Value)
+        If Len(value) > 0 And Not seen.Exists(value) Then
+            combo.AddItem value
+            seen(value) = True
+        End If
+    Next r
+End Sub
+
+Public Sub BuilderFillComboFromArray(ByVal combo As Object, ByVal values As Variant, Optional ByVal includeBlank As Boolean = False)
+    Dim i As Long
+
+    combo.Clear
+    If includeBlank Then combo.AddItem ""
+
+    For i = LBound(values) To UBound(values)
+        combo.AddItem CStr(values(i))
+    Next i
+End Sub
+
+Public Function BuilderNextSortOrder(ByVal sectorName As String) As Long
+    Dim ws As Worksheet
+    Dim map As Object
+    Dim r As Long
+    Dim last As Long
+    Dim maxSort As Long
+
+    Set ws = ThisWorkbook.Worksheets(CHARTS_SHEET)
+    Set map = HeaderMap(ws, 1)
+    last = LastRow(ws, 1)
+
+    For r = 2 To last
+        If CleanText(CellByHeader(ws, r, map, "Sector")) = sectorName Then
+            If IsNumeric(CellByHeader(ws, r, map, "Sort Order")) Then
+                If CLng(CellByHeader(ws, r, map, "Sort Order")) > maxSort Then
+                    maxSort = CLng(CellByHeader(ws, r, map, "Sort Order"))
+                End If
+            End If
+        End If
+    Next r
+
+    BuilderNextSortOrder = maxSort + 1
+End Function
+
+Public Function BuilderGetDataSourceInfo( _
+    ByVal dataSourceId As String, _
+    ByRef sourceType As String, _
+    ByRef sourceRef As String, _
+    ByRef sourceSheet As String, _
+    ByRef sourceRange As String, _
+    ByRef dataFunction As String) As Boolean
+    Dim ws As Worksheet
+    Dim map As Object
+    Dim r As Long
+    Dim last As Long
+
+    Set ws = ThisWorkbook.Worksheets(DATA_SOURCES_SHEET)
+    Set map = HeaderMap(ws, 1)
+    last = LastRow(ws, 1)
+
+    For r = 2 To last
+        If CleanText(CellByHeader(ws, r, map, "Data Source ID")) = dataSourceId Then
+            sourceType = CleanText(CellByHeader(ws, r, map, "Source Type"))
+            sourceRef = CleanText(CellByHeader(ws, r, map, "Source Ref"))
+            sourceSheet = CleanText(CellByHeader(ws, r, map, "Sheet"))
+            sourceRange = CleanText(CellByHeader(ws, r, map, "Range"))
+            dataFunction = CleanText(CellByHeader(ws, r, map, "Data Function"))
+            BuilderGetDataSourceInfo = True
+            Exit Function
+        End If
+    Next r
+
+    BuilderGetDataSourceInfo = False
+End Function
+
+Public Function BuilderResolvePath(ByVal pathValue As String) As String
+    If Len(CleanText(pathValue)) = 0 Then
+        BuilderResolvePath = ""
+    ElseIf Mid$(pathValue, 2, 2) = ":\" Or Left$(pathValue, 2) = "\\" Then
+        BuilderResolvePath = pathValue
+    Else
+        BuilderResolvePath = ProjectRootPath() & "\" & pathValue
+    End If
+End Function
+
+Public Sub BuilderFillCombosWithExcelHeaders(ByVal dataSourceId As String, ParamArray combos() As Variant)
+    Dim sourceType As String
+    Dim sourceRef As String
+    Dim sourceSheet As String
+    Dim sourceRange As String
+    Dim dataFunction As String
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim headerRange As Range
+    Dim c As Range
+    Dim i As Long
+    Dim fullPath As String
+
+    If Not BuilderGetDataSourceInfo(dataSourceId, sourceType, sourceRef, sourceSheet, sourceRange, dataFunction) Then
+        MsgBox "Data source not found: " & dataSourceId, vbExclamation
+        Exit Sub
+    End If
+
+    If LCase$(sourceType) <> "excel" Then
+        MsgBox "Field selection is available for Excel data sources only.", vbInformation
+        Exit Sub
+    End If
+
+    fullPath = BuilderResolvePath(sourceRef)
+    If Len(Dir(fullPath)) = 0 Then
+        MsgBox "Could not find source workbook: " & fullPath, vbExclamation
+        Exit Sub
+    End If
+
+    Application.ScreenUpdating = False
+    Set wb = Workbooks.Open(Filename:=fullPath, ReadOnly:=True)
+    Set ws = wb.Worksheets(sourceSheet)
+
+    If Len(sourceRange) > 0 Then
+        Set headerRange = ws.Range(sourceRange).Rows(1)
+    Else
+        Set headerRange = ws.UsedRange.Rows(1)
+    End If
+
+    For i = LBound(combos) To UBound(combos)
+        combos(i).Clear
+        combos(i).AddItem ""
+    Next i
+
+    For Each c In headerRange.Cells
+        If Len(CleanText(c.Value)) > 0 Then
+            For i = LBound(combos) To UBound(combos)
+                combos(i).AddItem CleanText(c.Value)
+            Next i
+        End If
+    Next c
+
+    wb.Close SaveChanges:=False
+    Application.ScreenUpdating = True
+End Sub
+
+Public Sub BuilderSaveChartForm(ByVal form As Object)
+    Dim values(1 To 25) As Variant
+
+    values(1) = CBool(form.chkInclude.Value)
+    values(2) = Trim$(form.txtPlotId.Value)
+    values(3) = form.cboSector.Value
+    values(4) = form.cboPlotFunction.Value
+    values(5) = form.cboDataSourceId.Value
+    values(6) = Trim$(form.txtOutputFile.Value)
+    values(7) = Trim$(form.txtTitle.Value)
+    values(8) = Trim$(form.txtSubtitle.Value)
+    values(9) = form.txtSortOrder.Value
+    values(10) = form.cboXField.Value
+    values(11) = form.cboXFreq.Value
+    values(12) = form.cboGroupField.Value
+    values(13) = form.cboColumnValue.Value
+    values(14) = Trim$(form.txtColumnAxisLabel.Value)
+    values(15) = Trim$(form.txtColumnLegendLabel.Value)
+    values(16) = form.cboLineValue.Value
+    values(17) = Trim$(form.txtLineAxisLabel.Value)
+    values(18) = Trim$(form.txtLineLegendLabel.Value)
+    values(19) = form.cboColumnPosition.Value
+    values(20) = CBool(form.chkForecast.Value)
+    values(21) = CBool(form.chkUseMetadataPalette.Value)
+    values(22) = form.txtPrimaryMinBreaks.Value
+    values(23) = form.txtPrimaryMaxBreaks.Value
+    values(24) = form.txtSecondaryMinBreaks.Value
+    values(25) = form.txtSecondaryMaxBreaks.Value
+
+    WriteRowValues ThisWorkbook.Worksheets(CHARTS_SHEET), values
+End Sub
+
+Public Sub BuilderSaveDataSourceForm(ByVal form As Object)
+    Dim values(1 To 8) As Variant
+
+    values(1) = Trim$(form.txtDataSourceId.Value)
+    values(2) = form.cboSourceType.Value
+    values(3) = Trim$(form.txtSourceRef.Value)
+    values(4) = Trim$(form.txtSheet.Value)
+    values(5) = Trim$(form.txtRange.Value)
+    values(6) = Trim$(form.txtDataFunction.Value)
+    values(7) = CBool(form.chkCache.Value)
+    values(8) = Trim$(form.txtNotes.Value)
+
+    WriteRowValues ThisWorkbook.Worksheets(DATA_SOURCES_SHEET), values
+End Sub
+
+Private Sub WriteRowValues(ByVal ws As Worksheet, ByVal values As Variant)
+    Dim outRow As Long
+    Dim i As Long
+
+    outRow = LastRow(ws, 1) + 1
+    For i = LBound(values) To UBound(values)
+        ws.Cells(outRow, i).Value = values(i)
+    Next i
 End Sub
 
 Public Sub BuildRConfig()
@@ -284,13 +650,24 @@ Private Sub AddChartDefaults(ByVal argsSheet As Worksheet, ByRef argRow As Long,
         If CleanText(CellByHeader(src, r, map, "Plot Function")) = plotFunction Then
             argName = CleanText(CellByHeader(src, r, map, "Arg Name"))
             If Len(argName) > 0 And Not usedArgs.Exists(argName) Then
-                AddPlotArg argsSheet, argRow, usedArgs, plotId, argName, CellByHeader(src, r, map, "Arg Value"), CellByHeader(src, r, map, "Arg Type"), CellByHeader(src, r, map, "Notes")
+                AddPlotArg argsSheet, argRow, usedArgs, plotId, argName, _
+                    CellByHeader(src, r, map, "Arg Value"), _
+                    CellByHeader(src, r, map, "Arg Type"), _
+                    CellByHeader(src, r, map, "Notes")
             End If
         End If
     Next r
 End Sub
 
-Private Sub AddPlotArg(ByVal ws As Worksheet, ByRef outRow As Long, ByVal usedArgs As Object, ByVal plotId As String, ByVal argName As String, ByVal argValue As Variant, ByVal argType As String, ByVal notes As String)
+Private Sub AddPlotArg( _
+    ByVal ws As Worksheet, _
+    ByRef outRow As Long, _
+    ByVal usedArgs As Object, _
+    ByVal plotId As String, _
+    ByVal argName As String, _
+    ByVal argValue As Variant, _
+    ByVal argType As String, _
+    ByVal notes As String)
     If Len(CleanText(argName)) = 0 Then Exit Sub
     If IsEmptyValue(argValue) Then Exit Sub
 
@@ -388,6 +765,10 @@ Private Function CleanText(ByVal value As Variant) As String
     End If
 End Function
 
+Private Function PromptValue(ByVal title As String, ByVal prompt As String, ByVal defaultValue As String) As String
+    PromptValue = Trim$(InputBox(prompt, title, defaultValue))
+End Function
+
 Private Function IsEmptyValue(ByVal value As Variant) As Boolean
     If IsError(value) Or IsNull(value) Or IsEmpty(value) Then
         IsEmptyValue = True
@@ -451,6 +832,10 @@ Private Function GetReleaseValue(ByVal settingName As String) As Variant
 End Function
 
 Private Function ConfigRootPath() As String
+    ConfigRootPath = ProjectRootPath() & "\config"
+End Function
+
+Private Function ProjectRootPath() As String
     Dim p As String
     Dim marker As String
     Dim pos As Long
@@ -460,9 +845,9 @@ Private Function ConfigRootPath() As String
     pos = InStr(1, LCase$(p), marker, vbTextCompare)
 
     If pos > 0 Then
-        ConfigRootPath = Left$(p, pos + Len(marker) - 2)
+        ProjectRootPath = Left$(p, pos - 1)
     Else
-        ConfigRootPath = p
+        ProjectRootPath = p
     End If
 End Function
 
@@ -493,7 +878,14 @@ Private Sub EnsureFolder(ByVal path As String)
     fso.CreateFolder path
 End Sub
 
-Private Sub AddButton(ByVal ws As Worksheet, ByVal caption As String, ByVal macroName As String, ByVal leftPos As Double, ByVal topPos As Double, ByVal widthVal As Double, ByVal heightVal As Double)
+Private Sub AddButton( _
+    ByVal ws As Worksheet, _
+    ByVal caption As String, _
+    ByVal macroName As String, _
+    ByVal leftPos As Double, _
+    ByVal topPos As Double, _
+    ByVal widthVal As Double, _
+    ByVal heightVal As Double)
     Dim btn As Button
     Set btn = ws.Buttons.Add(leftPos, topPos, widthVal, heightVal)
     btn.Caption = caption
