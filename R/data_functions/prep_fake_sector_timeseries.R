@@ -1,3 +1,7 @@
+#' Prepare fake sector time series data
+#'
+#' @sopi_fields year, product, sector, export_value_nzd, export_volume_tonnes
+#' @return A data frame with columns: year, product, sector, export_value_nzd, export_volume_tonnes.
 prep_fake_sector_timeseries <- function(
     sector,
     historical_start_year = NULL,

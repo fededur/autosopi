@@ -218,7 +218,19 @@ A data function should:
 
 - return a data frame
 - accept `...`
+- document its output columns with `@sopi_fields`
 - avoid writing files unless caching is intentional
+
+Example:
+
+```r
+#' Prepare my chart data
+#'
+#' @sopi_fields year, group, revenue, volume
+prep_my_data <- function(...) {
+  data.frame(year = 2026, group = "Example", revenue = 1, volume = 1)
+}
+```
 
 After adding new R functions, open the builder workbook and click the relevant refresh button.
 

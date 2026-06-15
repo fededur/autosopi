@@ -72,6 +72,17 @@ Choose one of these source types:
 `function`
 : Use this when R creates or prepares the data. The builder shows the available R data functions from the project.
 
+For R function data sources, the builder can also suggest the chart fields if the R function has a roxygen-style field line, for example:
+
+```r
+#' @sopi_fields year, group, revenue, volume
+prep_my_data <- function(...) {
+  ...
+}
+```
+
+After adding or changing this line, click `Refresh Data Functions`.
+
 Use clear names for data sources, for example:
 
 ```text
@@ -114,7 +125,7 @@ Click `Refresh Data Functions` when new data functions have been added to:
 R/data_functions/
 ```
 
-These buttons update the dropdown lists used by the builder.
+These buttons update the dropdown lists used by the builder. `Refresh Data Functions` also reads any `@sopi_fields` lines and stores the known output fields in the `Lists` sheet.
 
 ## If Something Goes Wrong
 

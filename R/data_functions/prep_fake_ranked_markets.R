@@ -1,3 +1,7 @@
+#' Prepare fake ranked market data
+#'
+#' @sopi_fields sector, year, market, export_value_nzd
+#' @return A data frame with columns: sector, year, market, export_value_nzd.
 prep_fake_ranked_markets <- function(
     sector,
     historical_start_year = NULL,

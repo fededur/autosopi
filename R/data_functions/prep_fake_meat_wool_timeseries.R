@@ -1,3 +1,7 @@
+#' Prepare fake Meat and Wool time series data
+#'
+#' @sopi_fields year, group, sector, revenue, volume, export_value_nzd, export_volume_tonnes
+#' @return A data frame with columns: year, group, sector, revenue, volume, export_value_nzd, export_volume_tonnes.
 prep_fake_meat_wool_timeseries <- function(
     sector = "Meat and Wool",
     historical_start_year = NULL,

@@ -48,6 +48,7 @@ Public Sub ShowChartWizard()
     Dim columnValue As String
     Dim lineValue As String
     Dim sortOrder As Variant
+    Dim fields As Collection
     Dim values(1 To 25) As Variant
 
     sectorName = PromptValue("Sector", "Enter sector name, for example Seafood.", "")
@@ -63,15 +64,17 @@ Public Sub ShowChartWizard()
     dataSourceId = PromptSelectFromList("Data Source ID", GetListValues(DATA_SOURCES_SHEET, "Data Source ID"))
     If Len(dataSourceId) = 0 Then Exit Sub
 
+    Set fields = GetDataSourceFieldNames(dataSourceId)
+
     outputFile = PromptValue("Output File", "Enter SVG output filename.", plotId & ".svg")
     If Len(outputFile) = 0 Then Exit Sub
 
-    xField = PromptValue("X Field", "Enter x/date/year column name.", "year")
+    xField = PromptSelectField("X Field", fields, FirstExistingField(fields, Array("year", "date", "month"), "year"), False)
     If Len(xField) = 0 Then Exit Sub
 
-    groupField = PromptValue("Group Field", "Enter group/category column name. Leave blank for no group.", "group")
-    columnValue = PromptValue("Column Value", "Enter column/bar value field. Leave blank if not needed.", "revenue")
-    lineValue = PromptValue("Line Value", "Enter line value field. Leave blank if not needed.", "volume")
+    groupField = PromptSelectField("Group Field", fields, FirstExistingField(fields, Array("group", "product", "market", "category"), "group"), True)
+    columnValue = PromptSelectField("Column Value", fields, FirstExistingField(fields, Array("revenue", "export_value_nzd", "value"), "revenue"), True)
+    lineValue = PromptSelectField("Line Value", fields, FirstExistingField(fields, Array("volume", "export_volume_tonnes"), "volume"), True)
 
     If Len(columnValue) = 0 And Len(lineValue) = 0 Then
         MsgBox "At least one value field is required.", vbExclamation
@@ -159,8 +162,10 @@ Public Sub RefreshDataFunctionsFromR(Optional ByVal showMessage As Boolean = Tru
     Dim folderPath As String
     Dim ws As Worksheet
     Dim colNum As Long
+    Dim fieldsColNum As Long
     Dim rowNum As Long
     Dim key As Variant
+    Dim fields As Collection
 
     Set functions = CreateObject("Scripting.Dictionary")
     folderPath = ProjectRootPath() & "\R\data_functions"
@@ -169,11 +174,15 @@ Public Sub RefreshDataFunctionsFromR(Optional ByVal showMessage As Boolean = Tru
 
     Set ws = EnsureSheet("Lists")
     colNum = EnsureHeaderColumn(ws, "Data Functions")
+    fieldsColNum = EnsureHeaderColumn(ws, "Data Function Fields")
     ws.Range(ws.Cells(2, colNum), ws.Cells(ws.Rows.Count, colNum)).ClearContents
+    ws.Range(ws.Cells(2, fieldsColNum), ws.Cells(ws.Rows.Count, fieldsColNum)).ClearContents
 
     rowNum = 2
     For Each key In functions.Keys
         ws.Cells(rowNum, colNum).Value = CStr(key)
+        Set fields = GetDataFunctionFields(CStr(key))
+        ws.Cells(rowNum, fieldsColNum).Value = JoinCollection(fields, ", ")
         rowNum = rowNum + 1
     Next key
 
@@ -467,6 +476,174 @@ Private Function PromptSelectFromList(ByVal title As String, ByVal values As Col
     End If
 End Function
 
+Private Function PromptSelectField(ByVal title As String, ByVal fields As Collection, ByVal defaultValue As String, ByVal allowBlank As Boolean) As String
+    Dim prompt As String
+    Dim i As Long
+    Dim answer As String
+    Dim index As Long
+
+    If fields.Count = 0 Then
+        PromptSelectField = PromptValue(title, "Enter " & title & ".", defaultValue)
+        Exit Function
+    End If
+
+    prompt = "Select " & title & " by number, or type a column name:" & vbCrLf & vbCrLf
+    If allowBlank Then prompt = prompt & "0. Leave blank" & vbCrLf
+
+    For i = 1 To fields.Count
+        prompt = prompt & i & ". " & CStr(fields(i)) & vbCrLf
+    Next i
+
+    answer = PromptValue(title, prompt, CStr(DefaultFieldIndex(fields, defaultValue, allowBlank)))
+    If Len(answer) = 0 Then
+        PromptSelectField = ""
+    ElseIf IsNumeric(answer) Then
+        index = CLng(answer)
+        If allowBlank And index = 0 Then
+            PromptSelectField = ""
+        ElseIf index >= 1 And index <= fields.Count Then
+            PromptSelectField = CStr(fields(index))
+        Else
+            PromptSelectField = ""
+        End If
+    Else
+        PromptSelectField = answer
+    End If
+End Function
+
+Private Function DefaultFieldIndex(ByVal fields As Collection, ByVal defaultValue As String, ByVal allowBlank As Boolean) As Long
+    Dim i As Long
+
+    If Len(defaultValue) = 0 And allowBlank Then
+        DefaultFieldIndex = 0
+        Exit Function
+    End If
+
+    For i = 1 To fields.Count
+        If LCase$(CStr(fields(i))) = LCase$(defaultValue) Then
+            DefaultFieldIndex = i
+            Exit Function
+        End If
+    Next i
+
+    If allowBlank Then
+        DefaultFieldIndex = 0
+    Else
+        DefaultFieldIndex = 1
+    End If
+End Function
+
+Private Function FirstExistingField(ByVal fields As Collection, ByVal candidates As Variant, ByVal fallback As String) As String
+    Dim candidateIndex As Long
+    Dim fieldIndex As Long
+
+    For candidateIndex = LBound(candidates) To UBound(candidates)
+        For fieldIndex = 1 To fields.Count
+            If LCase$(CStr(fields(fieldIndex))) = LCase$(CStr(candidates(candidateIndex))) Then
+                FirstExistingField = CStr(fields(fieldIndex))
+                Exit Function
+            End If
+        Next fieldIndex
+    Next candidateIndex
+
+    FirstExistingField = fallback
+End Function
+
+Private Sub AddUniqueText(ByVal values As Collection, ByVal value As String)
+    Dim i As Long
+    Dim cleanValue As String
+
+    cleanValue = CleanText(value)
+    If Len(cleanValue) = 0 Then Exit Sub
+
+    For i = 1 To values.Count
+        If LCase$(CStr(values(i))) = LCase$(cleanValue) Then Exit Sub
+    Next i
+
+    values.Add cleanValue
+End Sub
+
+Private Function IsRoxygenLine(ByVal lineText As String) As Boolean
+    IsRoxygenLine = (Left$(Trim$(lineText), 2) = "#'")
+End Function
+
+Private Function CleanRoxygenLine(ByVal lineText As String) As String
+    Dim text As String
+
+    text = Trim$(lineText)
+    If Left$(text, 2) = "#'" Then text = Mid$(text, 3)
+    CleanRoxygenLine = Trim$(text)
+End Function
+
+Private Sub AppendFieldsFromRoxygen(ByVal docs As Collection, ByVal fields As Collection)
+    Dim i As Long
+    Dim lineText As String
+    Dim lowerText As String
+    Dim payload As String
+    Dim pos As Long
+
+    For i = 1 To docs.Count
+        lineText = CStr(docs(i))
+        lowerText = LCase$(lineText)
+
+        If Left$(lowerText, 12) = "@sopi_fields" Then
+            payload = Trim$(Mid$(lineText, 13))
+            AddDelimitedFields fields, payload
+        ElseIf Left$(lowerText, 11) = "@sopi_field" Then
+            payload = Trim$(Mid$(lineText, 12))
+            AddDelimitedFields fields, payload
+        ElseIf Left$(lowerText, 7) = "@return" Then
+            pos = InStr(1, lowerText, "columns:", vbTextCompare)
+            If pos > 0 Then
+                payload = Mid$(lineText, pos + Len("columns:"))
+                AddDelimitedFields fields, payload
+            End If
+        End If
+    Next i
+End Sub
+
+Private Sub AddDelimitedFields(ByVal fields As Collection, ByVal payload As String)
+    Dim cleanPayload As String
+    Dim parts As Variant
+    Dim i As Long
+
+    cleanPayload = Replace(payload, ";", ",")
+    parts = Split(cleanPayload, ",")
+
+    For i = LBound(parts) To UBound(parts)
+        AddUniqueText fields, CleanFieldToken(CStr(parts(i)))
+    Next i
+End Sub
+
+Private Function CleanFieldToken(ByVal value As String) As String
+    Dim text As String
+
+    text = Trim$(value)
+    text = Replace(text, "`", "")
+
+    Do While Len(text) > 0 And InStr(1, " .:;)", Right$(text, 1), vbBinaryCompare) > 0
+        text = Left$(text, Len(text) - 1)
+    Loop
+
+    Do While Len(text) > 0 And InStr(1, " (", Left$(text, 1), vbBinaryCompare) > 0
+        text = Mid$(text, 2)
+    Loop
+
+    CleanFieldToken = Trim$(text)
+End Function
+
+Private Function JoinCollection(ByVal values As Collection, ByVal delimiter As String) As String
+    Dim i As Long
+    Dim result As String
+
+    For i = 1 To values.Count
+        If Len(result) > 0 Then result = result & delimiter
+        result = result & CStr(values(i))
+    Next i
+
+    JoinCollection = result
+End Function
+
 Public Function BuilderNextSortOrder(ByVal sectorName As String) As Long
     Dim ws As Worksheet
     Dim map As Object
@@ -530,6 +707,140 @@ Public Function BuilderResolvePath(ByVal pathValue As String) As String
     Else
         BuilderResolvePath = ProjectRootPath() & "\" & pathValue
     End If
+End Function
+
+Private Function GetDataSourceFieldNames(ByVal dataSourceId As String) As Collection
+    Dim sourceType As String
+    Dim sourceRef As String
+    Dim sourceSheet As String
+    Dim sourceRange As String
+    Dim dataFunction As String
+    Dim fields As Collection
+
+    Set fields = New Collection
+    If Not BuilderGetDataSourceInfo(dataSourceId, sourceType, sourceRef, sourceSheet, sourceRange, dataFunction) Then
+        Set GetDataSourceFieldNames = fields
+        Exit Function
+    End If
+
+    If LCase$(sourceType) = "excel" Then
+        Set fields = GetExcelHeaderFields(sourceRef, sourceSheet, sourceRange)
+    ElseIf LCase$(sourceType) = "function" Then
+        Set fields = GetDataFunctionFields(dataFunction)
+    End If
+
+    Set GetDataSourceFieldNames = fields
+End Function
+
+Private Function GetExcelHeaderFields(ByVal sourceRef As String, ByVal sourceSheet As String, ByVal sourceRange As String) As Collection
+    Dim fields As Collection
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim headerRange As Range
+    Dim c As Range
+    Dim fullPath As String
+    Dim oldScreenUpdating As Boolean
+
+    Set fields = New Collection
+    fullPath = BuilderResolvePath(sourceRef)
+
+    If Len(fullPath) = 0 Or Len(Dir(fullPath)) = 0 Or Len(sourceSheet) = 0 Then
+        Set GetExcelHeaderFields = fields
+        Exit Function
+    End If
+
+    On Error GoTo CleanFail
+    oldScreenUpdating = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    Set wb = Workbooks.Open(Filename:=fullPath, UpdateLinks:=False, ReadOnly:=True, AddToMru:=False)
+    Set ws = wb.Worksheets(sourceSheet)
+
+    If Len(sourceRange) > 0 Then
+        Set headerRange = ws.Range(sourceRange).Rows(1)
+    Else
+        Set headerRange = ws.UsedRange.Rows(1)
+    End If
+
+    For Each c In headerRange.Cells
+        If Len(CleanText(c.Value)) > 0 Then AddUniqueText fields, CleanText(c.Value)
+    Next c
+
+CleanExit:
+    If Not wb Is Nothing Then wb.Close SaveChanges:=False
+    Application.ScreenUpdating = oldScreenUpdating
+    Set GetExcelHeaderFields = fields
+    Exit Function
+
+CleanFail:
+    Resume CleanExit
+End Function
+
+Private Function GetDataFunctionFields(ByVal dataFunction As String) As Collection
+    Dim fields As Collection
+    Dim filePath As String
+
+    Set fields = New Collection
+    filePath = FindRFunctionFile(ProjectRootPath() & "\R\data_functions", dataFunction)
+
+    If Len(filePath) > 0 Then
+        Set fields = LoadRoxygenFieldsFromFile(filePath, dataFunction)
+    End If
+
+    Set GetDataFunctionFields = fields
+End Function
+
+Private Function FindRFunctionFile(ByVal folderPath As String, ByVal functionName As String) As String
+    Dim fso As Object
+    Dim folder As Object
+    Dim file As Object
+    Dim functions As Object
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(folderPath) Then Exit Function
+
+    Set folder = fso.GetFolder(folderPath)
+    For Each file In folder.Files
+        If LCase$(fso.GetExtensionName(file.Name)) = "r" Then
+            Set functions = CreateObject("Scripting.Dictionary")
+            LoadFunctionNamesFromFile CStr(file.Path), functions
+            If functions.Exists(functionName) Then
+                FindRFunctionFile = CStr(file.Path)
+                Exit Function
+            End If
+        End If
+    Next file
+End Function
+
+Private Function LoadRoxygenFieldsFromFile(ByVal filePath As String, ByVal functionName As String) As Collection
+    Dim fields As Collection
+    Dim fso As Object
+    Dim stream As Object
+    Dim docs As Collection
+    Dim lineText As String
+    Dim functionFound As Boolean
+
+    Set fields = New Collection
+    Set docs = New Collection
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set stream = fso.OpenTextFile(filePath, 1, False)
+
+    Do Until stream.AtEndOfStream
+        lineText = stream.ReadLine
+
+        If IsRoxygenLine(lineText) Then
+            docs.Add CleanRoxygenLine(lineText)
+        ElseIf ExtractRFunctionName(lineText) = functionName Then
+            AppendFieldsFromRoxygen docs, fields
+            functionFound = True
+            Exit Do
+        ElseIf Len(Trim$(lineText)) > 0 Then
+            Set docs = New Collection
+        End If
+    Loop
+
+    stream.Close
+    Set LoadRoxygenFieldsFromFile = fields
 End Function
 
 Public Sub BuilderFillCombosWithExcelHeaders(ByVal dataSourceId As String, ParamArray combos() As Variant)
