@@ -9,11 +9,20 @@ source(file.path("R", "plot_functions", "plot_sopi.R"))
 
 set.seed(123)
 
+metadata_table <- read_metadata(file.path("metadata", "sopi_metadata.xlsx"), sheet = "metadata")
+
+seafood_palette <- get_palette(
+  level = "forecast_group",
+  sector = "Seafood",
+  ref = "key",
+  metadata_table = metadata_table
+)
+
 monthly_dates <- seq(as.Date("2022-01-01"), as.Date("2025-12-01"), by = "1 month")
 
 monthly_data <- expand.grid(
   date = monthly_dates,
-  product = c("Fish", "Shellfish", "Aquaculture"),
+  product = c("Aquaculture", "Deepwater", "Inshore finfish"),
   stringsAsFactors = FALSE
 ) |>
   arrange(date, product) |>
@@ -23,23 +32,19 @@ monthly_data <- expand.grid(
     trend = (year_no - min(year_no)) * 12 + month_no,
     seasonal = sin(2 * pi * month_no / 12),
     export_value_nzd = case_when(
-      product == "Fish" ~ 85 + trend * 1.2 + seasonal * 9 + rnorm(n(), 0, 4),
-      product == "Shellfish" ~ 45 + trend * 0.8 + seasonal * 5 + rnorm(n(), 0, 3),
+      product == "Deepwater" ~ 85 + trend * 1.2 + seasonal * 9 + rnorm(n(), 0, 4),
+      product == "Inshore finfish" ~ 45 + trend * 0.8 + seasonal * 5 + rnorm(n(), 0, 3),
       product == "Aquaculture" ~ 60 + trend * 1.0 + seasonal * 7 + rnorm(n(), 0, 3.5)
     ) * 1000000,
     export_volume_tonnes = case_when(
-      product == "Fish" ~ 18000 + trend * 180 + seasonal * 1800 + rnorm(n(), 0, 700),
-      product == "Shellfish" ~ 9500 + trend * 90 + seasonal * 900 + rnorm(n(), 0, 450),
+      product == "Deepwater" ~ 18000 + trend * 180 + seasonal * 1800 + rnorm(n(), 0, 700),
+      product == "Inshore finfish" ~ 9500 + trend * 90 + seasonal * 900 + rnorm(n(), 0, 450),
       product == "Aquaculture" ~ 13000 + trend * 130 + seasonal * 1300 + rnorm(n(), 0, 550)
     )
   ) |>
   select(date, product, export_value_nzd, export_volume_tonnes)
 
-seafood_palette <- c(
-  Fish = "#0077B6",
-  Shellfish = "#00A6A6",
-  Aquaculture = "#90BE6D"
-)
+seafood_palette <- seafood_palette[unique(monthly_data$product)]
 
 p_monthly <- plot_sopi(
   data = monthly_data,
