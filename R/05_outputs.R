@@ -1,14 +1,3 @@
-palette_from_config <- function(config, palette_name) {
-  if (is.null(palette_name) || is.na(palette_name)) return(NULL)
-
-  rows <- config$palettes |>
-    dplyr::filter(.data$palette == palette_name)
-
-  if (nrow(rows) == 0) return(NULL)
-
-  stats::setNames(rows$hex, rows$item)
-}
-
 save_chart_svg <- function(plot, output_path, width = 9, height = 5) {
   dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
 

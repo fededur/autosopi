@@ -31,6 +31,9 @@ R/data_functions/
 R/plot_functions/
   R functions that return ggplot objects.
 
+metadata/sopi_metadata.xlsx
+  Sector and forecast-group metadata, including colour palettes.
+
 run_charts.R
   Main entry point.
 ```
@@ -60,6 +63,9 @@ run_charts.R
 
 `palettes`
 : Named colour palettes that can be referenced from global, sector, or plot settings.
+
+`metadata/sopi_metadata.xlsx`
+: Metadata-driven sector and forecast-group palettes. If no palette is supplied through config, the runner attempts to build a sector forecast-group palette from this workbook.
 
 ## Inheritance
 

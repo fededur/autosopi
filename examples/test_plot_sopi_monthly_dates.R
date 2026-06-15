@@ -4,6 +4,7 @@ library(scales)
 library(grid)
 library(svglite)
 
+source(file.path("R", "02_styling.R"))
 source(file.path("R", "plot_functions", "plot_sopi.R"))
 
 set.seed(123)

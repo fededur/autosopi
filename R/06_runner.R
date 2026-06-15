@@ -20,7 +20,7 @@ run_charts <- function(run_plan, config, project_root) {
         project_root = project_root
       )
 
-      plot_args <- clean_plot_args(resolved$plot_args, config)
+      plot_args <- clean_plot_args(resolved$plot_args, config, project_root)
       plot_args$data <- data
 
       plot <- call_named_function(job$plot_function, plot_args)
@@ -56,7 +56,9 @@ run_charts <- function(run_plan, config, project_root) {
   }
 }
 
-clean_plot_args <- function(args, config) {
+clean_plot_args <- function(args, config, project_root) {
+  sector <- args$sector
+
   framework_only <- c(
     "active", "sector", "plot_id", "plot_function", "data_source_id", "output_file",
     "sort_order", "notes", "source_type", "source_ref", "sheet", "range",
@@ -68,22 +70,36 @@ clean_plot_args <- function(args, config) {
 
   args <- args[setdiff(names(args), framework_only)]
 
-  if (!is.null(args$palette) && is.character(args$palette) && length(args$palette) == 1) {
-    pal <- palette_from_config(config, args$palette)
-    if (!is.null(pal)) args$palette <- pal
+  args$palette <- resolve_palette_arg(args$palette, config)
+  args$palette_fill <- resolve_palette_arg(args$palette_fill, config)
+  args$palette_line <- resolve_palette_arg(args$palette_line, config)
+
+  if (is.null(args$palette)) {
+    args$palette <- palette_from_metadata(project_root, sector = sector)
   }
 
-  if (!is.null(args$palette_fill) && is.character(args$palette_fill) && length(args$palette_fill) == 1) {
-    pal <- palette_from_config(config, args$palette_fill)
-    if (!is.null(pal)) args$palette_fill <- pal
+  if (is.null(args$palette_fill)) {
+    args$palette_fill <- args$palette
   }
 
-  if (!is.null(args$palette_line) && is.character(args$palette_line) && length(args$palette_line) == 1) {
-    pal <- palette_from_config(config, args$palette_line)
-    if (!is.null(pal)) args$palette_line <- pal
+  if (is.null(args$palette_line)) {
+    args$palette_line <- args$palette
   }
 
   args
+}
+
+resolve_palette_arg <- function(palette, config) {
+  if (is.null(palette) || length(palette) == 0) return(NULL)
+
+  if (is.character(palette) && length(palette) == 1) {
+    if (is.na(palette) || !nzchar(trimws(palette))) return(NULL)
+
+    config_palette <- palette_from_config(config, palette)
+    if (!is.null(config_palette)) return(config_palette)
+  }
+
+  palette
 }
 
 `%||%` <- function(x, y) {
