@@ -11,7 +11,18 @@ source(file.path(project_root, "R", "06_runner.R"))
 source_directory(file.path(project_root, "R", "data_functions"))
 source_directory(file.path(project_root, "R", "plot_functions"))
 
-config_path <- file.path(project_root, "config", "chart_config.xlsx")
+args <- commandArgs(trailingOnly = TRUE)
+default_config_path <- file.path(project_root, "config", "chart_config.xlsx")
+config_path <- if (length(args) >= 1 && nzchar(args[[1]])) {
+  args[[1]]
+} else {
+  Sys.getenv("AUTOSOPI_CONFIG", default_config_path)
+}
+
+if (!grepl("^([A-Za-z]:)?[/\\\\]", config_path)) {
+  config_path <- file.path(project_root, config_path)
+}
+
 config <- read_chart_config(config_path)
 run_plan <- build_run_plan(config)
 

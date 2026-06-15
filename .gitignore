@@ -2,6 +2,7 @@ logs/*.csv
 outputs/**/*.svg
 outputs/**/*.png
 outputs/**/*.pdf
+work/
 .Rhistory
 .RData
 .Ruserdata
@@ -9,3 +10,4 @@ outputs/**/*.pdf
 .Rproj.user
 config/*.pre_release_settings_backup.xlsx
 config/*.inspect.ndjson
+config/**/*.inspect.ndjson
