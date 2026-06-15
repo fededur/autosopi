@@ -6,7 +6,29 @@ read_config_sheet <- function(path, sheet) {
 read_chart_config <- function(path) {
   sheets <- readxl::excel_sheets(path)
   required <- c(
-    "settings_global",
+    "settings_sector",
+    "plots",
+    "data_sources",
+    "plot_args",
+    "data_args",
+    "run_control",
+    "palettes"
+  )
+
+  settings_sheet <- if ("release_settings" %in% sheets) {
+    "release_settings"
+  } else if ("settings_global" %in% sheets) {
+    "settings_global"
+  } else {
+    NA_character_
+  }
+
+  if (is.na(settings_sheet)) {
+    stop("Missing config sheet: release_settings", call. = FALSE)
+  }
+
+  required <- c(
+    settings_sheet,
     "settings_sector",
     "plots",
     "data_sources",
@@ -25,6 +47,10 @@ read_chart_config <- function(path) {
     lapply(required, function(sheet) read_config_sheet(path, sheet)),
     required
   )
+
+  if (!"release_settings" %in% names(config)) {
+    config$release_settings <- config[[settings_sheet]]
+  }
 
   validate_config(config)
   config
@@ -79,7 +105,7 @@ build_run_plan <- function(config) {
 }
 
 resolve_job_settings <- function(job, config) {
-  global <- settings_from_table(config$settings_global)
+  global <- settings_from_table(config$release_settings)
 
   sector_row <- config$settings_sector |>
     dplyr::filter(.data$sector == job$sector)
@@ -109,6 +135,9 @@ resolve_job_settings <- function(job, config) {
     args_from_table(config$plot_args, "plot_id", job$plot_id)
   )
 
+  plot_args <- apply_release_plot_aliases(plot_args)
+  data_args <- apply_release_data_aliases(data_args)
+
   list(
     global = global,
     sector = sector,
@@ -117,4 +146,28 @@ resolve_job_settings <- function(job, config) {
     data_args = data_args,
     plot_args = plot_args
   )
+}
+
+apply_release_plot_aliases <- function(args) {
+  if (is.null(args$forecast_start) && !is.null(args$forecast_start_year)) {
+    args$forecast_start <- args$forecast_start_year
+  }
+
+  if (is.null(args$forecast_end) && !is.null(args$forecast_end_year)) {
+    args$forecast_end <- args$forecast_end_year
+  }
+
+  args
+}
+
+apply_release_data_aliases <- function(args) {
+  if (is.null(args$year_start) && !is.null(args$historical_start_year)) {
+    args$year_start <- args$historical_start_year
+  }
+
+  if (is.null(args$year_end) && !is.null(args$historical_end_year)) {
+    args$year_end <- args$historical_end_year
+  }
+
+  args
 }

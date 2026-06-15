@@ -1,4 +1,3 @@
-ola$0114
 # SharePoint SVG Chart Framework
 
 This is a small R-based framework for generating SVG charts from Excel configuration files. It is designed for SharePoint-synced folders and does not require a server or Shiny.
@@ -14,7 +13,7 @@ This is a small R-based framework for generating SVG charts from Excel configura
 source("run_charts.R")
 ```
 
-SVG files are written to `outputs/<sector>/`.
+SVG files are written to `outputs/<release_year>/<release_round>/<sector>/`.
 
 ## Main Files
 
@@ -40,11 +39,11 @@ run_charts.R
 
 ## Config Workbook Sheets
 
-`settings_global`
-: Project-wide defaults such as output root, year range, palette, font, width, and height.
+`release_settings`
+: SOPI release-level defaults such as release year, release round, forecast years, output root, palette, font, width, and height.
 
 `settings_sector`
-: Sector-level defaults. These override global settings.
+: Sector-level defaults such as active flag, palette, and output subfolder. These override release settings where names overlap.
 
 `plots`
 : One row per chart output. Defines the sector, plot function, data source, title, subtitle, and SVG filename.
@@ -72,13 +71,29 @@ run_charts.R
 Settings are resolved in this order:
 
 ```text
-settings_global
+release_settings
   -> settings_sector
     -> plots
       -> plot_args / data_args
 ```
 
 More specific settings override broader settings.
+
+Outputs are organised by SOPI release:
+
+```text
+outputs/
+  2026/
+    June/
+      Seafood/
+      Forestry/
+      Horticulture/
+    December/
+      Seafood/
+      Forestry/
+```
+
+`forecast_start_year` and `forecast_end_year` in `release_settings` are mapped internally to plot-function arguments `forecast_start` and `forecast_end`. Plot-specific forecast years should only be added in `plot_args` when a chart is an exception to the release default.
 
 ## Adding a New Plot
 
@@ -122,11 +137,11 @@ The function should:
 Example:
 
 ```r
-prep_my_data <- function(sector, year_start, year_end, ...) {
+prep_my_data <- function(sector, historical_start_year, historical_end_year, ...) {
   data.frame(
     sector = sector,
-    year = year_start:year_end,
-    value = seq_along(year_start:year_end)
+    year = historical_start_year:historical_end_year,
+    value = seq_along(historical_start_year:historical_end_year)
   )
 }
 ```

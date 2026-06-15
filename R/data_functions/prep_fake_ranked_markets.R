@@ -1,7 +1,9 @@
 prep_fake_ranked_markets <- function(
     sector,
-    year_start,
-    year_end,
+    historical_start_year = NULL,
+    historical_end_year = NULL,
+    year_start = historical_start_year,
+    year_end = historical_end_year,
     markets = c("China", "Australia", "United States", "Japan", "Korea", "EU", "UK", "Singapore"),
     seed = 2,
     ...

@@ -1,7 +1,9 @@
 prep_fake_sector_timeseries <- function(
     sector,
-    year_start,
-    year_end,
+    historical_start_year = NULL,
+    historical_end_year = NULL,
+    year_start = historical_start_year,
+    year_end = historical_end_year,
     products = c("Product A", "Product B", "Product C"),
     seed = 1,
     ...
@@ -26,4 +28,3 @@ prep_fake_sector_timeseries <- function(
       export_volume_tonnes = round((12000 + product_index * 6000 + year_index * 900 + stats::rnorm(dplyr::n(), 0, 1200)), 0)
     )
 }
-

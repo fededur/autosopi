@@ -28,7 +28,14 @@ run_charts <- function(run_plan, config, project_root) {
       output_root <- resolved$global$output_root %||% "outputs"
       output_subfolder <- resolved$sector$output_subfolder %||% job$sector
       output_file <- job$output_file
-      output_path <- file.path(project_root, output_root, output_subfolder, output_file)
+      output_path <- build_output_path(
+        project_root = project_root,
+        output_root = output_root,
+        release_year = resolved$global$release_year,
+        release_round = resolved$global$release_round,
+        sector_folder = output_subfolder,
+        output_file = output_file
+      )
 
       if (!dry_run) {
         save_chart_svg(
@@ -66,7 +73,8 @@ clean_plot_args <- function(args, config, project_root, data = NULL) {
     "data_function", "cache", "output_root", "output_subfolder", "file_type",
     "width", "height", "dpi", "overwrite", "setting_name", "setting_value",
     "setting_type", "dry_run", "run_all_active", "sector_filter", "plot_id_filter",
-    "save_logs"
+    "save_logs", "release_year", "release_round", "historical_start_year",
+    "historical_end_year", "forecast_start_year", "forecast_end_year"
   )
 
   args <- args[setdiff(names(args), framework_only)]
@@ -113,4 +121,27 @@ resolve_palette_arg <- function(palette, config) {
 
 `%||%` <- function(x, y) {
   if (is.null(x) || length(x) == 0 || is.na(x)) y else x
+}
+
+build_output_path <- function(
+    project_root,
+    output_root,
+    release_year,
+    release_round,
+    sector_folder,
+    output_file) {
+  release_parts <- c(release_year, release_round)
+  release_parts <- release_parts[!vapply(release_parts, is.null, logical(1))]
+  release_parts <- as.character(release_parts)
+  release_parts <- release_parts[!is.na(release_parts) & nzchar(release_parts)]
+  release_parts <- gsub("[^A-Za-z0-9_-]+", "_", release_parts)
+
+  do.call(
+    file.path,
+    c(
+      list(project_root, output_root),
+      as.list(release_parts),
+      list(sector_folder, output_file)
+    )
+  )
 }

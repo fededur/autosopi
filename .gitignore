@@ -7,3 +7,5 @@ outputs/**/*.pdf
 .Ruserdata
 ~$*.xlsx
 .Rproj.user
+config/*.pre_release_settings_backup.xlsx
+config/*.inspect.ndjson
