@@ -5,6 +5,7 @@ get_plot_data <- function(data_source, data_args, project_root) {
     read_excel_data(data_source, project_root)
   } else if (identical(source_type, "function")) {
     data_function <- data_source$data_function[[1]]
+    data_args$project_root <- project_root
     call_named_function(data_function, data_args)
   } else {
     stop("Unsupported source_type: ", source_type, call. = FALSE)
