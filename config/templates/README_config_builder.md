@@ -27,10 +27,14 @@ After this, go back to the `START HERE` sheet. You should see these buttons:
 
 - `Add Chart`
 - `Add Data Source`
+- `Delete Chart`
+- `Delete Data Source`
 - `Refresh Plot Functions`
 - `Refresh Data Functions`
 - `Build R Config`
 - `Export Chart Config`
+- `Set Project Folder`
+- `Refresh Plot List`
 
 ## Normal Use
 
@@ -40,13 +44,16 @@ Use this process for each SOPI release.
 2. Go to `Release Setup`.
 3. Set the release year, release round, forecast years, output folder, and chart size.
 4. Go back to `START HERE`.
-5. Click `Refresh Plot Functions`.
-6. Click `Refresh Data Functions`.
-7. Click `Add Data Source` for each dataset you need.
-8. Click `Add Chart` for each chart you want.
-9. Click `Build R Config`.
-10. Check the `Validation` sheet.
-11. If there are no errors, click `Export Chart Config`.
+5. If the workbook is not saved inside the SOPI Graphs project folder, click `Set Project Folder` and choose the folder that contains `R`, `config`, `metadata`, and `run_charts.R`.
+6. Click `Refresh Plot Functions`.
+7. Click `Refresh Data Functions`.
+8. Click `Add Data Source` for each dataset you need.
+9. Click `Add Chart` for each chart you want.
+10. Click `Refresh Plot List` to see the current plots by sector on `START HERE`.
+11. Use `Delete Chart` or `Delete Data Source` to remove anything you do not want in the release.
+12. Click `Build R Config`.
+13. Check the `Validation` sheet.
+14. If there are no errors, click `Export Chart Config`.
 
 The exported file will be saved here:
 
@@ -91,6 +98,8 @@ meat_wool_exports
 forestry_ranked_markets
 ```
 
+If you enter a data source ID that already exists, the builder asks whether to replace the existing row. Choose `Yes` only when you mean to update it.
+
 ## Adding A Chart
 
 Click `Add Chart`.
@@ -111,6 +120,34 @@ The builder will ask you to select or enter:
 
 When choosing the data source, the builder lists the data sources already added in the `Data Sources` sheet.
 
+If you enter a plot ID that already exists, the builder asks whether to replace the existing row. Choose `Yes` only when you mean to update it.
+
+## Deleting Config Items
+
+Click `Delete Chart` to remove a chart from the `Charts` sheet.
+
+Click `Delete Data Source` to remove a data source from the `Data Sources` sheet. This also removes matching rows from `Data Args`.
+
+After deleting anything, click:
+
+1. `Build R Config`
+2. `Export Chart Config`
+
+The exported config is rebuilt from the friendly sheets. If a row is removed from the friendly sheets, it will not be included in the next exported config.
+
+## Seeing The Current Plot List
+
+Click `Refresh Plot List` to update the summary on the `START HERE` sheet.
+
+The list is grouped by sector and shows:
+
+- Include
+- Plot ID
+- Plot Function
+- Data Source
+- Output File
+- Sort Order
+
 ## What The Refresh Buttons Do
 
 Click `Refresh Plot Functions` when new chart functions have been added to:
@@ -126,6 +163,8 @@ R/data_functions/
 ```
 
 These buttons update the dropdown lists used by the builder. `Refresh Data Functions` also reads any `@sopi_fields` lines and stores the known output fields in the `Lists` sheet.
+
+If either refresh button says it loaded `0` functions, click `Set Project Folder` and make sure the selected folder is the main SOPI Graphs project folder.
 
 ## If Something Goes Wrong
 

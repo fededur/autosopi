@@ -123,10 +123,14 @@ The main buttons are:
 
 - `Add Data Source`
 - `Add Chart`
+- `Delete Data Source`
+- `Delete Chart`
 - `Refresh Plot Functions`
 - `Refresh Data Functions`
 - `Build R Config`
 - `Export Chart Config`
+- `Set Project Folder`
+- `Refresh Plot List`
 
 The builder can list:
 
@@ -134,6 +138,12 @@ The builder can list:
 - data functions from `R/data_functions/`
 - sheet names from selected Excel workbooks
 - existing data sources from the `Data Sources` sheet
+
+When adding a chart, the sector is selected from the standard SOPI sector list: Macro, Dairy, Meat and Wool, Forestry, Horticulture, Seafood, Arable, and Other foods.
+
+Adding a chart or data source appends a new row unless the ID already exists. If the ID exists, the builder asks before replacing that row. Delete buttons remove unwanted rows from the friendly sheets before the release config is rebuilt and exported.
+
+`Refresh Plot List` writes a current plot summary by sector onto the `START HERE` sheet.
 
 ## Running The Charts
 

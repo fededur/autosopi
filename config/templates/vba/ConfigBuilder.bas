@@ -19,6 +19,8 @@ Private Const TECH_DATA_ARGS As String = "data_args"
 Private Const TECH_RUN_CONTROL As String = "run_control"
 Private Const TECH_PALETTES As String = "palettes"
 
+Private mProjectRootPath As String
+
 Public Sub InstallBuilderButtons()
     Dim ws As Worksheet
     Set ws = ThisWorkbook.Worksheets(START_SHEET)
@@ -33,8 +35,36 @@ Public Sub InstallBuilderButtons()
     AddButton ws, "Refresh Data Functions", "RefreshDataFunctionsFromR", 490, 250, 170, 28
     AddButton ws, "Build R Config", "BuildRConfig", 670, 250, 130, 28
     AddButton ws, "Export Chart Config", "ExportChartConfigXlsx", 810, 250, 150, 28
+    AddButton ws, "Set Project Folder", "SetProjectFolder", 20, 290, 150, 28
+    AddButton ws, "Delete Chart", "DeleteChartWizard", 180, 290, 130, 28
+    AddButton ws, "Delete Data Source", "DeleteDataSourceWizard", 320, 290, 150, 28
+    AddButton ws, "Refresh Plot List", "RefreshStartHerePlotList", 480, 290, 150, 28
 
     MsgBox "Buttons installed on START HERE.", vbInformation
+End Sub
+
+Public Sub SetProjectFolder()
+    Dim selectedPath As String
+    Dim rootPath As String
+    Dim defaultPath As String
+
+    If Len(mProjectRootPath) > 0 Then
+        defaultPath = mProjectRootPath
+    Else
+        defaultPath = ThisWorkbook.Path
+    End If
+
+    selectedPath = PromptValue("Project Folder", "Enter the SOPI Graphs project folder. It should contain the R and config folders.", defaultPath)
+    If Len(selectedPath) = 0 Then Exit Sub
+
+    rootPath = FindProjectRootFrom(selectedPath)
+    If Len(rootPath) = 0 Then
+        MsgBox "That folder does not look like the SOPI Graphs project folder. Choose the folder that contains R, config, metadata, and run_charts.R.", vbExclamation
+        Exit Sub
+    End If
+
+    mProjectRootPath = rootPath
+    MsgBox "Project folder set to:" & vbCrLf & rootPath, vbInformation
 End Sub
 
 Public Sub ShowChartWizard()
@@ -51,7 +81,7 @@ Public Sub ShowChartWizard()
     Dim fields As Collection
     Dim values(1 To 25) As Variant
 
-    sectorName = PromptValue("Sector", "Enter sector name, for example Seafood.", "")
+    sectorName = PromptSelectFromList("Sector", SopiSectorValues())
     If Len(sectorName) = 0 Then Exit Sub
 
     plotId = PromptValue("Plot ID", "Enter a unique plot ID.", LCase$(Replace(sectorName, " ", "_")) & "_fig_1")
@@ -109,9 +139,10 @@ Public Sub ShowChartWizard()
     values(24) = 4
     values(25) = 6
 
-    WriteRowValues ThisWorkbook.Worksheets(CHARTS_SHEET), values
+    If Not WriteOrReplaceRowValues(ThisWorkbook.Worksheets(CHARTS_SHEET), "Plot ID", plotId, values) Then Exit Sub
+    RefreshStartHerePlotList
 
-    MsgBox "Chart added to the Charts sheet.", vbInformation
+    MsgBox "Chart saved to the Charts sheet.", vbInformation
 End Sub
 
 Public Sub ShowDataSourceWizard()
@@ -152,9 +183,135 @@ Public Sub ShowDataSourceWizard()
     values(7) = False
     values(8) = ""
 
-    WriteRowValues ThisWorkbook.Worksheets(DATA_SOURCES_SHEET), values
+    If Not WriteOrReplaceRowValues(ThisWorkbook.Worksheets(DATA_SOURCES_SHEET), "Data Source ID", dataSourceId, values) Then Exit Sub
 
-    MsgBox "Data source added to the Data Sources sheet.", vbInformation
+    MsgBox "Data source saved to the Data Sources sheet.", vbInformation
+End Sub
+
+Public Sub DeleteChartWizard()
+    Dim plotId As String
+    Dim deletedCount As Long
+
+    plotId = PromptSelectFromList("Plot ID to delete", GetListValues(CHARTS_SHEET, "Plot ID"))
+    If Len(plotId) = 0 Then Exit Sub
+
+    If MsgBox("Delete chart '" & plotId & "' from the Charts sheet?", vbQuestion + vbYesNo) <> vbYes Then Exit Sub
+
+    deletedCount = DeleteRowsByHeaderValue(ThisWorkbook.Worksheets(CHARTS_SHEET), "Plot ID", plotId)
+    RefreshStartHerePlotList
+    MsgBox "Deleted " & deletedCount & " chart row(s). Click Build R Config and Export Chart Config to update the release config.", vbInformation
+End Sub
+
+Public Sub RefreshStartHerePlotList()
+    Dim startWs As Worksheet
+    Dim chartsWs As Worksheet
+    Dim map As Object
+    Dim sectors As Collection
+    Dim sectorIndex As Long
+    Dim sectorName As String
+    Dim outRow As Long
+
+    Set startWs = ThisWorkbook.Worksheets(START_SHEET)
+    Set chartsWs = ThisWorkbook.Worksheets(CHARTS_SHEET)
+    Set map = HeaderMap(chartsWs, 1)
+    Set sectors = SopiSectorValues()
+
+    ClearStartHerePlotList startWs
+
+    outRow = 24
+    startWs.Cells(outRow, 1).Value = "Current plots by sector"
+    startWs.Cells(outRow, 1).Font.Bold = True
+    startWs.Cells(outRow, 1).Font.Size = 13
+    outRow = outRow + 2
+
+    For sectorIndex = 1 To sectors.Count
+        sectorName = CStr(sectors(sectorIndex))
+        outRow = WriteSectorPlotList(startWs, chartsWs, map, sectorName, outRow)
+    Next sectorIndex
+
+    startWs.Columns("A:F").AutoFit
+End Sub
+
+Private Sub ClearStartHerePlotList(ByVal ws As Worksheet)
+    ws.Range("A24:F500").Clear
+End Sub
+
+Private Function WriteSectorPlotList( _
+    ByVal startWs As Worksheet, _
+    ByVal chartsWs As Worksheet, _
+    ByVal map As Object, _
+    ByVal sectorName As String, _
+    ByVal startRow As Long) As Long
+    Dim r As Long
+    Dim last As Long
+    Dim outRow As Long
+    Dim count As Long
+
+    outRow = startRow
+    last = LastRow(chartsWs, 1)
+
+    For r = 2 To last
+        If CleanText(CellByHeader(chartsWs, r, map, "Sector")) = sectorName Then
+            count = count + 1
+        End If
+    Next r
+
+    If count = 0 Then
+        WriteSectorPlotList = outRow
+        Exit Function
+    End If
+
+    startWs.Cells(outRow, 1).Value = sectorName
+    startWs.Cells(outRow, 1).Font.Bold = True
+    outRow = outRow + 1
+
+    startWs.Cells(outRow, 1).Value = "Include"
+    startWs.Cells(outRow, 2).Value = "Plot ID"
+    startWs.Cells(outRow, 3).Value = "Plot Function"
+    startWs.Cells(outRow, 4).Value = "Data Source"
+    startWs.Cells(outRow, 5).Value = "Output File"
+    startWs.Cells(outRow, 6).Value = "Sort Order"
+    startWs.Range(startWs.Cells(outRow, 1), startWs.Cells(outRow, 6)).Font.Bold = True
+    outRow = outRow + 1
+
+    For r = 2 To last
+        If CleanText(CellByHeader(chartsWs, r, map, "Sector")) = sectorName Then
+            startWs.Cells(outRow, 1).Value = CellByHeader(chartsWs, r, map, "Include")
+            startWs.Cells(outRow, 2).Value = CellByHeader(chartsWs, r, map, "Plot ID")
+            startWs.Cells(outRow, 3).Value = CellByHeader(chartsWs, r, map, "Plot Function")
+            startWs.Cells(outRow, 4).Value = CellByHeader(chartsWs, r, map, "Data Source ID")
+            startWs.Cells(outRow, 5).Value = CellByHeader(chartsWs, r, map, "Output File")
+            startWs.Cells(outRow, 6).Value = CellByHeader(chartsWs, r, map, "Sort Order")
+            outRow = outRow + 1
+        End If
+    Next r
+
+    WriteSectorPlotList = outRow + 1
+End Function
+
+Public Sub DeleteDataSourceWizard()
+    Dim dataSourceId As String
+    Dim chartCount As Long
+    Dim deletedSources As Long
+    Dim deletedArgs As Long
+    Dim message As String
+
+    dataSourceId = PromptSelectFromList("Data Source ID to delete", GetListValues(DATA_SOURCES_SHEET, "Data Source ID"))
+    If Len(dataSourceId) = 0 Then Exit Sub
+
+    chartCount = CountRowsByHeaderValue(ThisWorkbook.Worksheets(CHARTS_SHEET), "Data Source ID", dataSourceId)
+
+    message = "Delete data source '" & dataSourceId & "' from the Data Sources sheet?"
+    If chartCount > 0 Then
+        message = message & vbCrLf & vbCrLf & chartCount & " chart row(s) still use this data source. Delete or update those charts too."
+    End If
+
+    If MsgBox(message, vbExclamation + vbYesNo) <> vbYes Then Exit Sub
+
+    deletedSources = DeleteRowsByHeaderValue(ThisWorkbook.Worksheets(DATA_SOURCES_SHEET), "Data Source ID", dataSourceId)
+    deletedArgs = DeleteRowsByHeaderValue(ThisWorkbook.Worksheets(DATA_ARGS_SHEET), "Data Source ID", dataSourceId)
+
+    MsgBox "Deleted " & deletedSources & " data source row(s) and " & deletedArgs & " data argument row(s). Click Build R Config and Export Chart Config to update the release config.", vbInformation
 End Sub
 
 Public Sub RefreshDataFunctionsFromR(Optional ByVal showMessage As Boolean = True)
@@ -186,7 +343,7 @@ Public Sub RefreshDataFunctionsFromR(Optional ByVal showMessage As Boolean = Tru
         rowNum = rowNum + 1
     Next key
 
-    If showMessage Then
+    If showMessage Or functions.Count = 0 Then
         MsgBox "Loaded " & functions.Count & " data function(s) from " & folderPath, vbInformation
     End If
 End Sub
@@ -303,7 +460,7 @@ Public Sub RefreshPlotFunctionsFromR(Optional ByVal showMessage As Boolean = Tru
         rowNum = rowNum + 1
     Next key
 
-    If showMessage Then
+    If showMessage Or functions.Count = 0 Then
         MsgBox "Loaded " & functions.Count & " plot function(s) from " & folderPath, vbInformation
     End If
 End Sub
@@ -345,28 +502,63 @@ Private Sub LoadFunctionNamesFromFile(ByVal filePath As String, ByVal functions 
 End Sub
 
 Private Function ExtractRFunctionName(ByVal lineText As String) As String
-    Dim regex As Object
-    Dim matches As Object
+    Dim text As String
+    Dim assignPos As Long
+    Dim namePart As String
+    Dim rhs As String
 
-    Set regex = CreateObject("VBScript.RegExp")
-    regex.Pattern = "^([A-Za-z.][A-Za-z0-9._]*)\s*(<-|=)\s*function\s*\("
-    regex.IgnoreCase = False
-    regex.Global = False
+    If lineText <> LTrim$(lineText) Then Exit Function
 
-    If regex.Test(lineText) Then
-        Set matches = regex.Execute(lineText)
-        ExtractRFunctionName = CStr(matches(0).SubMatches(0))
-        Exit Function
+    text = Trim$(lineText)
+    If Len(text) = 0 Or Left$(text, 1) = "#" Then Exit Function
+
+    assignPos = InStr(1, text, "<-", vbTextCompare)
+    If assignPos = 0 Then assignPos = InStr(1, text, "=", vbTextCompare)
+    If assignPos = 0 Then Exit Function
+
+    namePart = Trim$(Left$(text, assignPos - 1))
+    rhs = Trim$(Mid$(text, assignPos + IIf(Mid$(text, assignPos, 2) = "<-", 2, 1)))
+
+    If Not IsSimpleRName(namePart) Then Exit Function
+
+    If Left$(LCase$(RemoveSpaces(rhs)), 9) = "function(" Then
+        ExtractRFunctionName = namePart
+    ElseIf IsPlotFunctionAlias(namePart) And IsSimpleRName(rhs) Then
+        ExtractRFunctionName = namePart
     End If
+End Function
 
-    regex.Pattern = "^(plot[A-Za-z0-9._]*|[A-Za-z0-9._]*_plot)\s*(<-|=)\s*([A-Za-z.][A-Za-z0-9._]*)\s*$"
-    If regex.Test(lineText) Then
-        Set matches = regex.Execute(lineText)
-        ExtractRFunctionName = CStr(matches(0).SubMatches(0))
-        Exit Function
-    End If
+Private Function RemoveSpaces(ByVal value As String) As String
+    Dim text As String
 
-    ExtractRFunctionName = ""
+    text = Replace(value, " ", "")
+    text = Replace(text, vbTab, "")
+    RemoveSpaces = text
+End Function
+
+Private Function IsSimpleRName(ByVal value As String) As Boolean
+    Dim i As Long
+    Dim ch As String
+
+    value = Trim$(value)
+    If Len(value) = 0 Then Exit Function
+
+    ch = Mid$(value, 1, 1)
+    If Not (ch Like "[A-Za-z.]") Then Exit Function
+
+    For i = 2 To Len(value)
+        ch = Mid$(value, i, 1)
+        If Not (ch Like "[A-Za-z0-9._]") Then Exit Function
+    Next i
+
+    IsSimpleRName = True
+End Function
+
+Private Function IsPlotFunctionAlias(ByVal value As String) As Boolean
+    Dim lowerValue As String
+
+    lowerValue = LCase$(Trim$(value))
+    IsPlotFunctionAlias = (Left$(lowerValue, 4) = "plot" Or Right$(lowerValue, 5) = "_plot")
 End Function
 
 Private Function GetListValues(ByVal sheetName As String, ByVal headerName As String) As Collection
@@ -409,6 +601,18 @@ Private Function CollectionFromArray(ByVal values As Variant) As Collection
     Next i
 
     Set CollectionFromArray = result
+End Function
+
+Private Function SopiSectorValues() As Collection
+    Set SopiSectorValues = CollectionFromArray(Array( _
+        "Macro", _
+        "Dairy", _
+        "Meat and Wool", _
+        "Forestry", _
+        "Horticulture", _
+        "Seafood", _
+        "Arable", _
+        "Other foods"))
 End Function
 
 Private Function GetWorkbookSheetNames(ByVal sourceRef As String) As Collection
@@ -956,6 +1160,82 @@ Private Sub WriteRowValues(ByVal ws As Worksheet, ByVal values As Variant)
     Next i
 End Sub
 
+Private Function WriteOrReplaceRowValues(ByVal ws As Worksheet, ByVal keyHeader As String, ByVal keyValue As String, ByVal values As Variant) As Boolean
+    Dim existingRow As Long
+
+    existingRow = FindRowByHeaderValue(ws, keyHeader, keyValue)
+    If existingRow > 0 Then
+        If MsgBox(keyHeader & " '" & keyValue & "' already exists. Replace the existing row?", vbQuestion + vbYesNo) <> vbYes Then Exit Function
+        WriteValuesToRow ws, existingRow, values
+    Else
+        WriteRowValues ws, values
+    End If
+
+    WriteOrReplaceRowValues = True
+End Function
+
+Private Sub WriteValuesToRow(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal values As Variant)
+    Dim i As Long
+
+    For i = LBound(values) To UBound(values)
+        ws.Cells(rowNum, i).Value = values(i)
+    Next i
+End Sub
+
+Private Function FindRowByHeaderValue(ByVal ws As Worksheet, ByVal headerName As String, ByVal keyValue As String) As Long
+    Dim colNum As Long
+    Dim r As Long
+    Dim last As Long
+
+    colNum = BuilderHeaderColumn(ws, headerName)
+    If colNum = 0 Then Exit Function
+
+    last = LastRow(ws, colNum)
+    For r = 2 To last
+        If CleanText(ws.Cells(r, colNum).Value) = keyValue Then
+            FindRowByHeaderValue = r
+            Exit Function
+        End If
+    Next r
+End Function
+
+Private Function CountRowsByHeaderValue(ByVal ws As Worksheet, ByVal headerName As String, ByVal keyValue As String) As Long
+    Dim colNum As Long
+    Dim r As Long
+    Dim last As Long
+    Dim count As Long
+
+    colNum = BuilderHeaderColumn(ws, headerName)
+    If colNum = 0 Then Exit Function
+
+    last = LastRow(ws, colNum)
+    For r = 2 To last
+        If CleanText(ws.Cells(r, colNum).Value) = keyValue Then count = count + 1
+    Next r
+
+    CountRowsByHeaderValue = count
+End Function
+
+Private Function DeleteRowsByHeaderValue(ByVal ws As Worksheet, ByVal headerName As String, ByVal keyValue As String) As Long
+    Dim colNum As Long
+    Dim r As Long
+    Dim last As Long
+    Dim deletedCount As Long
+
+    colNum = BuilderHeaderColumn(ws, headerName)
+    If colNum = 0 Then Exit Function
+
+    last = LastRow(ws, colNum)
+    For r = last To 2 Step -1
+        If CleanText(ws.Cells(r, colNum).Value) = keyValue Then
+            ws.Rows(r).Delete
+            deletedCount = deletedCount + 1
+        End If
+    Next r
+
+    DeleteRowsByHeaderValue = deletedCount
+End Function
+
 Public Sub BuildRConfig()
     Application.ScreenUpdating = False
 
@@ -1409,19 +1689,87 @@ Private Function ConfigRootPath() As String
 End Function
 
 Private Function ProjectRootPath() As String
-    Dim p As String
-    Dim marker As String
-    Dim pos As Long
+    Dim rootPath As String
+    Dim configuredPath As String
 
-    p = ThisWorkbook.Path
-    marker = "\config\"
-    pos = InStr(1, LCase$(p), marker, vbTextCompare)
-
-    If pos > 0 Then
-        ProjectRootPath = Left$(p, pos - 1)
-    Else
-        ProjectRootPath = p
+    If Len(mProjectRootPath) > 0 Then
+        ProjectRootPath = mProjectRootPath
+        Exit Function
     End If
+
+    rootPath = FindProjectRootFrom(ThisWorkbook.Path)
+    If Len(rootPath) = 0 Then
+        configuredPath = GetConfiguredProjectRoot()
+        If Len(configuredPath) > 0 Then rootPath = FindProjectRootFrom(configuredPath)
+    End If
+
+    If Len(rootPath) = 0 Then
+        configuredPath = PromptValue("Project Root", "Enter the SOPI Graphs project folder. It should contain the R and config folders.", ThisWorkbook.Path)
+        If Len(configuredPath) > 0 Then rootPath = FindProjectRootFrom(configuredPath)
+    End If
+
+    If Len(rootPath) > 0 Then
+        mProjectRootPath = rootPath
+        ProjectRootPath = mProjectRootPath
+    Else
+        ProjectRootPath = ThisWorkbook.Path
+    End If
+End Function
+
+Private Function FindProjectRootFrom(ByVal startPath As String) As String
+    Dim fso As Object
+    Dim candidate As String
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    candidate = CleanText(startPath)
+    If Len(candidate) = 0 Then Exit Function
+
+    If fso.FileExists(candidate) Then candidate = fso.GetParentFolderName(candidate)
+    If Not fso.FolderExists(candidate) Then Exit Function
+
+    Do While Len(candidate) > 0
+        If ProjectRootLooksValid(candidate) Then
+            FindProjectRootFrom = candidate
+            Exit Function
+        End If
+
+        If fso.GetParentFolderName(candidate) = candidate Then Exit Do
+        candidate = fso.GetParentFolderName(candidate)
+    Loop
+End Function
+
+Private Function ProjectRootLooksValid(ByVal folderPath As String) As Boolean
+    Dim fso As Object
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    ProjectRootLooksValid = _
+        fso.FolderExists(folderPath & "\R\plot_functions") And _
+        fso.FolderExists(folderPath & "\R\data_functions") And _
+        fso.FolderExists(folderPath & "\config")
+End Function
+
+Private Function GetConfiguredProjectRoot() As String
+    Dim ws As Worksheet
+    Dim r As Long
+    Dim last As Long
+    Dim key As String
+    Dim value As String
+
+    If Not BuilderSheetExists(RELEASE_SHEET) Then Exit Function
+
+    Set ws = ThisWorkbook.Worksheets(RELEASE_SHEET)
+    last = LastRow(ws, 1)
+
+    For r = 1 To last
+        key = LCase$(CleanText(ws.Cells(r, 1).Value))
+        If key = "project_root" Or key = "project root" Or key = "project folder" Then
+            value = CleanText(ws.Cells(r, 2).Value)
+            If Len(value) > 0 Then
+                GetConfiguredProjectRoot = value
+                Exit Function
+            End If
+        End If
+    Next r
 End Function
 
 Private Function CleanPathPart(ByVal value As String) As String
