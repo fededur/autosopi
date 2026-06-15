@@ -5,4 +5,5 @@ outputs/**/*.pdf
 .Rhistory
 .RData
 .Ruserdata
+~$*.xlsx
 .Rproj.user

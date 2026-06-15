@@ -65,7 +65,7 @@ run_charts.R
 : Named colour palettes that can be referenced from global, sector, or plot settings.
 
 `metadata/sopi_metadata.xlsx`
-: Metadata-driven sector and forecast-group palettes. If no palette is supplied through config, the runner attempts to build a sector forecast-group palette from this workbook.
+: Metadata-driven sector and forecast-group palettes. If no palette is supplied through config, the runner attempts to build a sector forecast-group palette from the `forecast_palette` sheet by filtering `sector_key` and mapping `forecast_group_key` to `color`. Missing product colours are completed with ggplot hue colours.
 
 ## Inheritance
 

@@ -43,6 +43,25 @@ build_color_palette <- function(categories, colors, other_category = NULL, other
   palette
 }
 
+complete_palette <- function(categories, palette = NULL) {
+  categories <- unique(as.character(categories))
+
+  if (is.null(palette)) {
+    palette <- character()
+  }
+
+  palette <- palette[!is.na(names(palette)) & nzchar(names(palette))]
+  missing_categories <- setdiff(categories, names(palette))
+
+  if (length(missing_categories) > 0) {
+    extra_colors <- scales::hue_pal()(length(missing_categories))
+    names(extra_colors) <- missing_categories
+    palette <- c(palette, extra_colors)
+  }
+
+  palette[categories]
+}
+
 get_palette <- function(
     level = c("sector", "forecast_group"),
     sector = NULL,
@@ -110,6 +129,39 @@ get_palette <- function(
   pal[!duplicated(names(pal))]
 }
 
+get_forecast_palette <- function(
+    sector,
+    forecast_palette_table,
+    ref = c("key", "label"),
+    fill = "actual",
+    include_total = FALSE) {
+  ref <- match.arg(ref)
+
+  df <- forecast_palette_table |>
+    clean_metadata_names() |>
+    dplyr::filter(.data$sector_key %in% sector) |>
+    dplyr::filter(.data$include %in% c(TRUE, "TRUE", "true", "Yes", "yes", 1))
+
+  if (!is.null(fill)) {
+    df <- df |>
+      dplyr::filter(.data$fill %in% fill)
+  }
+
+  if (!include_total) {
+    df <- df |>
+      dplyr::filter(!grepl("total", tolower(.data$forecast_group_key)))
+  }
+
+  label_col <- if (ref == "label") "forecast_group_label" else "forecast_group_key"
+
+  df <- df |>
+    dplyr::transmute(label = .data[[label_col]], color = .data$color) |>
+    dplyr::filter(!is.na(.data$label), nzchar(.data$label), !is.na(.data$color), nzchar(.data$color))
+
+  pal <- stats::setNames(df$color, df$label)
+  pal[!duplicated(names(pal))]
+}
+
 palette_from_config <- function(config, palette_name) {
   if (is.null(palette_name) || is.na(palette_name)) return(NULL)
   if (is.null(config$palettes) || nrow(config$palettes) == 0) return(NULL)
@@ -149,6 +201,38 @@ palette_from_metadata <- function(
     metadata_table = metadata,
     include_total = include_total
   )
+}
+
+palette_from_forecast_metadata <- function(
+    project_root,
+    sector,
+    categories = NULL,
+    ref = "key",
+    fill = "actual",
+    include_total = FALSE,
+    metadata_file = "sopi_metadata.xlsx",
+    sheet = "forecast_palette") {
+  path <- metadata_path(project_root, metadata_file)
+
+  if (!file.exists(path) || is.null(sector) || is.na(sector)) {
+    return(NULL)
+  }
+
+  forecast_palette <- readxl::read_xlsx(path, sheet = sheet)
+
+  pal <- get_forecast_palette(
+    sector = sector,
+    forecast_palette_table = forecast_palette,
+    ref = ref,
+    fill = fill,
+    include_total = include_total
+  )
+
+  if (!is.null(categories)) {
+    pal <- complete_palette(categories, pal)
+  }
+
+  pal
 }
 
 theme_sopi <- function(family = "Calibri", base_size = 10.5, ...) {

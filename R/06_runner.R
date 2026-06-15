@@ -20,7 +20,7 @@ run_charts <- function(run_plan, config, project_root) {
         project_root = project_root
       )
 
-      plot_args <- clean_plot_args(resolved$plot_args, config, project_root)
+      plot_args <- clean_plot_args(resolved$plot_args, config, project_root, data)
       plot_args$data <- data
 
       plot <- call_named_function(job$plot_function, plot_args)
@@ -56,8 +56,9 @@ run_charts <- function(run_plan, config, project_root) {
   }
 }
 
-clean_plot_args <- function(args, config, project_root) {
+clean_plot_args <- function(args, config, project_root, data = NULL) {
   sector <- args$sector
+  group <- args$group
 
   framework_only <- c(
     "active", "sector", "plot_id", "plot_function", "data_source_id", "output_file",
@@ -75,7 +76,7 @@ clean_plot_args <- function(args, config, project_root) {
   args$palette_line <- resolve_palette_arg(args$palette_line, config)
 
   if (is.null(args$palette)) {
-    args$palette <- palette_from_metadata(project_root, sector = sector)
+    args$palette <- palette_from_forecast_metadata(project_root, sector = sector)
   }
 
   if (is.null(args$palette_fill)) {
@@ -84,6 +85,14 @@ clean_plot_args <- function(args, config, project_root) {
 
   if (is.null(args$palette_line)) {
     args$palette_line <- args$palette
+  }
+
+  if (!is.null(data) && !is.null(group) && group %in% names(data)) {
+    categories <- unique(as.character(data[[group]]))
+
+    args$palette <- complete_palette(categories, args$palette)
+    args$palette_fill <- complete_palette(categories, args$palette_fill)
+    args$palette_line <- complete_palette(categories, args$palette_line)
   }
 
   args
