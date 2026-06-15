@@ -66,6 +66,8 @@ run_charts.R
 `metadata/sopi_metadata.xlsx`
 : Metadata-driven sector and forecast-group palettes. If no palette is supplied through config, the runner attempts to build a sector forecast-group palette from the `forecast_palette` sheet by filtering `sector_key` and mapping `forecast_group_key` to `color`. Missing product colours are completed with ggplot hue colours.
 
+The runner loads this workbook once per run as a shared metadata resource. Plot functions should accept common style arguments such as `palette`, `palette_fill`, `palette_line`, and `labels`; they should not read the metadata workbook directly. The runner fills these arguments from metadata when they are not supplied in config.
+
 ## Inheritance
 
 Settings are resolved in this order:
@@ -112,6 +114,7 @@ The function should:
 
 - accept `data` as its first argument
 - use string column names, e.g. `.data[[x]]`
+- accept shared styling arguments where relevant, especially `palette` and `labels`
 - return a ggplot object
 - not save files itself
 

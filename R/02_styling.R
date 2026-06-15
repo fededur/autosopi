@@ -251,6 +251,121 @@ metadata_path <- function(project_root, filename = "sopi_metadata.xlsx") {
   file.path(project_root, "metadata", filename)
 }
 
+load_metadata_resource <- function(project_root, metadata_file = "sopi_metadata.xlsx") {
+  path <- metadata_path(project_root, metadata_file)
+
+  if (!file.exists(path)) {
+    return(list(path = path, metadata = NULL, forecast_palette = NULL))
+  }
+
+  sheets <- readxl::excel_sheets(path)
+
+  list(
+    path = path,
+    metadata = if ("metadata" %in% sheets) read_metadata(path, sheet = "metadata") else NULL,
+    forecast_palette = if ("forecast_palette" %in% sheets) {
+      readxl::read_xlsx(path, sheet = "forecast_palette") |>
+        clean_metadata_names()
+    } else {
+      NULL
+    }
+  )
+}
+
+get_forecast_labels <- function(
+    sector,
+    forecast_palette_table,
+    ref = c("key", "label"),
+    fill = "actual",
+    include_total = FALSE) {
+  ref <- match.arg(ref)
+
+  if (is.null(forecast_palette_table) || nrow(forecast_palette_table) == 0) {
+    return(NULL)
+  }
+
+  df <- forecast_palette_table |>
+    clean_metadata_names() |>
+    dplyr::filter(.data$sector_key %in% sector) |>
+    dplyr::filter(.data$include %in% c(TRUE, "TRUE", "true", "Yes", "yes", 1))
+
+  if (!is.null(fill) && "fill" %in% names(df)) {
+    df <- df |>
+      dplyr::filter(.data$fill %in% fill)
+  }
+
+  if (!include_total) {
+    df <- df |>
+      dplyr::filter(!grepl("total", tolower(.data$forecast_group_key)))
+  }
+
+  name_col <- if (ref == "label") "forecast_group_label" else "forecast_group_key"
+
+  df <- df |>
+    dplyr::transmute(name = .data[[name_col]], label = .data$forecast_group_label) |>
+    dplyr::filter(!is.na(.data$name), nzchar(.data$name), !is.na(.data$label), nzchar(.data$label))
+
+  labels <- stats::setNames(df$label, df$name)
+  labels[!duplicated(names(labels))]
+}
+
+complete_labels <- function(categories, labels = NULL) {
+  categories <- unique(as.character(categories))
+
+  if (is.null(labels)) {
+    labels <- character()
+  }
+
+  labels <- labels[!is.na(names(labels)) & nzchar(names(labels))]
+  missing_categories <- setdiff(categories, names(labels))
+
+  if (length(missing_categories) > 0) {
+    labels <- c(labels, stats::setNames(missing_categories, missing_categories))
+  }
+
+  labels[categories]
+}
+
+style_from_metadata <- function(
+    metadata_resource,
+    sector,
+    categories = NULL,
+    ref = "key",
+    fill = "actual",
+    include_total = FALSE) {
+  if (
+    is.null(metadata_resource) ||
+      is.null(metadata_resource$forecast_palette) ||
+      is.null(sector) ||
+      is.na(sector)
+  ) {
+    return(list(palette = NULL, labels = NULL))
+  }
+
+  palette <- get_forecast_palette(
+    sector = sector,
+    forecast_palette_table = metadata_resource$forecast_palette,
+    ref = ref,
+    fill = fill,
+    include_total = include_total
+  )
+
+  labels <- get_forecast_labels(
+    sector = sector,
+    forecast_palette_table = metadata_resource$forecast_palette,
+    ref = ref,
+    fill = fill,
+    include_total = include_total
+  )
+
+  if (!is.null(categories)) {
+    palette <- complete_palette(categories, palette)
+    labels <- complete_labels(categories, labels)
+  }
+
+  list(palette = palette, labels = labels)
+}
+
 palette_from_metadata <- function(
     project_root,
     sector,
@@ -291,7 +406,8 @@ palette_from_forecast_metadata <- function(
     return(NULL)
   }
 
-  forecast_palette <- readxl::read_xlsx(path, sheet = sheet)
+  forecast_palette <- readxl::read_xlsx(path, sheet = sheet) |>
+    clean_metadata_names()
 
   pal <- get_forecast_palette(
     sector = sector,

@@ -1,6 +1,7 @@
 run_charts <- function(run_plan, config, project_root) {
   run_control <- settings_from_table(config$run_control)
   dry_run <- isTRUE(run_control$dry_run)
+  metadata_resource <- load_metadata_resource(project_root)
 
   for (i in seq_len(nrow(run_plan))) {
     job <- run_plan[i, ]
@@ -20,7 +21,13 @@ run_charts <- function(run_plan, config, project_root) {
         project_root = project_root
       )
 
-      plot_args <- clean_plot_args(resolved$plot_args, config, project_root, data)
+      plot_args <- clean_plot_args(
+        args = resolved$plot_args,
+        config = config,
+        project_root = project_root,
+        data = data,
+        metadata_resource = metadata_resource
+      )
       plot_args$data <- data
 
       plot <- call_named_function(job$plot_function, plot_args)
@@ -63,7 +70,7 @@ run_charts <- function(run_plan, config, project_root) {
   }
 }
 
-clean_plot_args <- function(args, config, project_root, data = NULL) {
+clean_plot_args <- function(args, config, project_root, data = NULL, metadata_resource = NULL) {
   sector <- args$sector
   group <- args$group
 
@@ -83,8 +90,19 @@ clean_plot_args <- function(args, config, project_root, data = NULL) {
   args$palette_fill <- resolve_palette_arg(args$palette_fill, config)
   args$palette_line <- resolve_palette_arg(args$palette_line, config)
 
+  categories <- NULL
+  if (!is.null(data) && !is.null(group) && group %in% names(data)) {
+    categories <- unique(as.character(data[[group]]))
+  }
+
+  metadata_style <- style_from_metadata(
+    metadata_resource = metadata_resource,
+    sector = sector,
+    categories = categories
+  )
+
   if (is.null(args$palette)) {
-    args$palette <- palette_from_forecast_metadata(project_root, sector = sector)
+    args$palette <- metadata_style$palette
   }
 
   if (is.null(args$palette_fill)) {
@@ -95,12 +113,15 @@ clean_plot_args <- function(args, config, project_root, data = NULL) {
     args$palette_line <- args$palette
   }
 
-  if (!is.null(data) && !is.null(group) && group %in% names(data)) {
-    categories <- unique(as.character(data[[group]]))
+  if (is.null(args$labels)) {
+    args$labels <- metadata_style$labels
+  }
 
+  if (!is.null(categories)) {
     args$palette <- complete_palette(categories, args$palette)
     args$palette_fill <- complete_palette(categories, args$palette_fill)
     args$palette_line <- complete_palette(categories, args$palette_line)
+    args$labels <- complete_labels(categories, args$labels)
   }
 
   args
