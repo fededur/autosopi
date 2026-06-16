@@ -13,6 +13,56 @@ is_blank <- function(x) {
   length(x) == 0 || is.na(x) || !nzchar(trimws(as.character(x)))
 }
 
+is_absolute_path <- function(path) {
+  !is_blank(path) && grepl("^([A-Za-z]:|/|\\\\\\\\)", path)
+}
+
+path_context_value <- function(context, name) {
+  value <- context[[name]]
+  if (is.null(value) || length(value) == 0 || is.na(value)) "" else as.character(value[[1]])
+}
+
+render_path_template <- function(path, context = list()) {
+  if (is_blank(path)) return(path)
+
+  rendered <- as.character(path)
+  replacements <- c(
+    year = path_context_value(context, "release_year"),
+    release_year = path_context_value(context, "release_year"),
+    release = path_context_value(context, "release_round"),
+    release_round = path_context_value(context, "release_round"),
+    sector = path_context_value(context, "sector")
+  )
+
+  for (name in names(replacements)) {
+    rendered <- gsub(paste0("\\{", name, "\\}"), replacements[[name]], rendered, fixed = FALSE)
+  }
+
+  rendered
+}
+
+sopi_releases_root <- function() {
+  root <- Sys.getenv("SOPI_RELEASES_ROOT", unset = "")
+  if (is_blank(root)) NULL else root
+}
+
+resolve_project_path <- function(project_root, path, context = list()) {
+  if (is_blank(path)) return(path)
+
+  path <- render_path_template(path, context)
+
+  if (grepl("\\{SOPI_RELEASES_ROOT\\}", path)) {
+    root <- sopi_releases_root()
+    if (is.null(root)) {
+      stop("SOPI_RELEASES_ROOT is not set for portable SharePoint path: ", path, call. = FALSE)
+    }
+
+    path <- gsub("\\{SOPI_RELEASES_ROOT\\}", root, path)
+  }
+
+  if (is_absolute_path(path)) path else file.path(project_root, path)
+}
+
 parse_scalar <- function(value, type = "character") {
   if (is_blank(value)) return(NULL)
 

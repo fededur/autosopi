@@ -48,8 +48,8 @@ run_charts <- function(run_plan, config, project_root) {
         save_chart_svg(
           plot = plot,
           output_path = output_path,
-          width = as.numeric(resolved$global$width %||% 9),
-          height = as.numeric(resolved$global$height %||% 5)
+          width = as.numeric(resolved$plot_args$width %||% resolved$global$width %||% 9),
+          height = as.numeric(resolved$plot_args$height %||% resolved$global$height %||% 5)
         )
       }
     }, error = function(e) {
@@ -159,18 +159,36 @@ build_output_path <- function(
     release_round,
     sector_folder,
     output_file) {
+  context <- list(
+    release_year = release_year,
+    release_round = release_round,
+    sector = sector_folder
+  )
+  has_release_tokens <- grepl("\\{year\\}|\\{release_year\\}|\\{release\\}|\\{release_round\\}", output_root)
+  has_sector_token <- grepl("\\{sector\\}", output_root)
+
   release_parts <- c(release_year, release_round)
   release_parts <- release_parts[!vapply(release_parts, is.null, logical(1))]
   release_parts <- as.character(release_parts)
   release_parts <- release_parts[!is.na(release_parts) & nzchar(release_parts)]
   release_parts <- gsub("[^A-Za-z0-9_-]+", "_", release_parts)
+  if (has_release_tokens) {
+    release_parts <- character()
+  }
+
+  sector_parts <- if (has_sector_token) {
+    character()
+  } else {
+    sector_folder
+  }
 
   do.call(
     file.path,
     c(
-      list(project_root, output_root),
+      list(resolve_project_path(project_root, output_root, context)),
       as.list(release_parts),
-      list(sector_folder, output_file)
+      as.list(sector_parts),
+      list(output_file)
     )
   )
 }

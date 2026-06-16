@@ -26,11 +26,11 @@ Data can come from:
 - an Excel sheet
 - an R data function
 
-Outputs are usually saved to a SharePoint-synced output folder outside the project.
-The app still organises them by release and sector, for example:
+Outputs are usually saved to a SharePoint-synced SOPI releases folder outside the project.
+The app organises them by release and sector using editable path templates, for example:
 
 ```text
-<SharePoint output folder>/2026/June/Seafood/seafood_fig_1.svg
+<SOPI releases root>/2026/June/Graphs/Seafood/seafood_fig_1.svg
 ```
 
 ## Normal Workflow
@@ -38,12 +38,13 @@ The app still organises them by release and sector, for example:
 For the Shiny workflow:
 
 1. Run the local Shiny app.
-2. Set up the SOPI release and output folder in `Overview`.
-3. Select or load the chart data and data period in `Data`.
+2. Set up the SOPI release, local SOPI releases root, and path templates in `Overview`.
+3. Select or load the chart data in `Data`.
 4. Set common chart appearance in `General Style`.
 5. Select the plot function and chart-specific arguments in `Chart`.
-6. Preview the chart.
-7. Save the confirmed SVG.
+6. Refresh the chart preview in `Chart`.
+7. Set the SVG export width and height in `Chart`.
+8. Save the confirmed SVG and update the release `chart_config.xlsx`.
 
 For the Excel config workflow:
 
@@ -77,19 +78,21 @@ config/releases/
       chart_config.xlsx
 ```
 
-Chart outputs are saved like this:
+Chart outputs are usually saved like this:
 
 ```text
-<SharePoint output folder>/
+<SOPI releases root>/
   2026/
     June/
-      Seafood/
-      Meat and Wool/
-      Forestry/
+      Graphs/
+        Seafood/
+        Meat and Wool/
+        Forestry/
     December/
-      Seafood/
-      Meat and Wool/
-      Forestry/
+      Graphs/
+        Seafood/
+        Meat and Wool/
+        Forestry/
 ```
 
 ## Main Folders
@@ -163,24 +166,82 @@ Run the app from the project root:
 source("run_shiny_app.R")
 ```
 
-The app has five tabs:
+The app has four tabs:
 
 `Overview`
-: Set release, sector, output file, and the SharePoint output base folder. This tab shows the resolved chart output folder, lists SVGs already available for the selected release and sector, previews selected outputs, and allows unwanted output files to be deleted.
+: Set release, sector, the local SOPI releases root, and the folder templates for graph outputs and manual Excel data. This tab shows the resolved chart output folder, lists SVGs already available for the selected release and sector, previews selected outputs, and allows unwanted output files to be deleted.
 
 `Data`
-: Choose an R data function or Excel sheet, set the data period, and preview the loaded data.
+: Choose an R data function or Excel sheet and preview the loaded data. For Excel sources, the app defaults to the release/sector workbook and lists the workbook sheets as a dropdown.
 
 `General Style`
 : Set common chart style settings such as font family and base font size. These settings apply across chart types.
 
 `Chart`
-: Choose the plot function, forecast settings, fields, and chart-specific arguments.
+: Choose the plot function, forecast settings, fields, and chart-specific arguments. This tab also contains `Refresh Preview`, the chart visual, editable graph output folder template, SVG filename, resolved save path, SVG export width and height, and the save/update config controls.
 
-`Preview And Save`
-: Review the chart, set the SVG export width and height, and save the confirmed SVG.
+The local SOPI releases root should be the synced SharePoint folder that contains release folders such as `2026/June`. Each user can have a different local sync path. This local path is used by the app, but it is not written into the shared `chart_config.xlsx`.
 
-The output base folder should normally be the synced SharePoint folder where final SOPI SVGs are stored. Users paste the full folder path into `SharePoint output base folder`. SOPI Graphs then appends release year, release round, and sector to create the current chart output folder. The output file list on `Overview` lets users inspect existing outputs in that folder. SVG files can be previewed in the app. A selected output file can be deleted after ticking the delete confirmation box.
+The default graph output folder template is:
+
+```text
+{year}/{release}/Graphs/{sector}
+```
+
+With local root `SOPI_releases`, year `2026`, release `June`, and sector `Macro`, this resolves to:
+
+```text
+SOPI_releases/2026/June/Graphs/Macro
+```
+
+The shared config stores the portable equivalent:
+
+```text
+{SOPI_RELEASES_ROOT}/{year}/{release}/Graphs/{sector}
+```
+
+To run charts from `run_charts.R`, each user should set `SOPI_RELEASES_ROOT` to their own synced SharePoint root before running a release config. The Shiny app sets this for the current R session from `Local SOPI releases root`.
+
+Manual Excel data should normally live in a SharePoint-synced data folder, organised as one workbook per sector and release:
+
+```text
+<SOPI releases root>/
+  2026/
+    June/
+      Data/
+        Macro/
+          Macro.xlsx
+        Seafood/
+          Seafood.xlsx
+        Forestry/
+          Forestry.xlsx
+        Dairy/
+          Dairy.xlsx
+        Meat and Wool/
+          Meat and Wool.xlsx
+        Horticulture/
+          Horticulture.xlsx
+        Arable/
+          Arable.xlsx
+        Other foods/
+          Other foods.xlsx
+```
+
+The default manual data workbook template is:
+
+```text
+{year}/{release}/Data/{sector}/{sector}.xlsx
+```
+
+If the folder structure changes later, update the templates in `Overview`; the rest of the app will use the new resolved paths. The Excel sheet selector is populated from the selected workbook.
+
+When `Update release chart_config.xlsx` is ticked, the Shiny app writes to:
+
+```text
+config/releases/<release year>/<June or December>/chart_config.xlsx
+```
+
+The app updates existing `plot_id` and `data_source_id` rows when those IDs already exist. New IDs are appended. The workbook can then be used by `run_charts.R` to regenerate the same chart later.
 
 ## Running The Charts
 
@@ -199,12 +260,14 @@ config/chart_config.xlsx
 To run a release-specific config from a terminal:
 
 ```sh
+$env:SOPI_RELEASES_ROOT = "C:\Users\<you>\SharePoint\SOPI_releases"
 Rscript run_charts.R config/releases/2026/June/chart_config.xlsx
 ```
 
 You can also run a release-specific config from R:
 
 ```r
+Sys.setenv(SOPI_RELEASES_ROOT = "C:/Users/<you>/SharePoint/SOPI_releases")
 Sys.setenv(AUTOSOPI_CONFIG = "config/releases/2026/June/chart_config.xlsx")
 source("run_charts.R")
 ```
@@ -289,6 +352,7 @@ Install these once on each user's machine:
 install.packages(c(
   "dplyr",
   "ggplot2",
+  "openxlsx",
   "readxl",
   "rlang",
   "scales",

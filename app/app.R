@@ -1,4 +1,4 @@
-required_app_packages <- c("shiny", "dplyr", "ggplot2", "readxl", "scales", "svglite")
+required_app_packages <- c("shiny", "dplyr", "ggplot2", "openxlsx", "readxl", "scales", "svglite")
 missing_app_packages <- required_app_packages[
   !vapply(required_app_packages, requireNamespace, logical(1), quietly = TRUE)
 ]
@@ -228,11 +228,7 @@ project_args <- function(input) {
 
 data_context_args <- function(input) {
   list(
-    sector = input$sector,
-    historical_start_year = input$historical_start_year,
-    historical_end_year = input$historical_end_year,
-    year_start = input$historical_start_year,
-    year_end = input$historical_end_year
+    sector = input$sector
   )
 }
 
@@ -268,6 +264,36 @@ optional_choices <- function(data) {
   c("None" = "", field_choices(data))
 }
 
+default_releases_root <- function(project_root) {
+  env_root <- Sys.getenv("SOPI_RELEASES_ROOT", unset = "")
+  if (nzchar(trimws(env_root))) {
+    return(normalizePath(env_root, winslash = "/", mustWork = FALSE))
+  }
+
+  user_profile <- Sys.getenv("USERPROFILE", unset = "")
+  if (nzchar(trimws(user_profile))) {
+    return(normalizePath(file.path(user_profile, "Documents", "outputs", "SOPI_releases"), winslash = "/", mustWork = FALSE))
+  }
+
+  normalizePath(file.path(project_root, "SOPI_releases"), winslash = "/", mustWork = FALSE)
+}
+
+safe_config_id <- function(value, fallback = "chart") {
+  value <- if (is.null(value) || !nzchar(trimws(value))) fallback else value
+  value <- tools::file_path_sans_ext(basename(value))
+  value <- tolower(gsub("[^A-Za-z0-9_]+", "_", value))
+  value <- gsub("^_+|_+$", "", value)
+  if (!nzchar(value)) fallback else value
+}
+
+normalize_svg_filename <- function(value) {
+  value <- if (is.null(value) || !nzchar(trimws(value))) "preview_chart.svg" else trimws(value)
+  if (!grepl("\\.svg$", value, ignore.case = TRUE)) {
+    value <- paste0(value, ".svg")
+  }
+  value
+}
+
 is_absolute_path <- function(path) {
   grepl("^([A-Za-z]:|/|\\\\\\\\)", path)
 }
@@ -286,20 +312,83 @@ resolve_output_base_path <- function(project_root, path) {
   }
 }
 
-build_output_folder <- function(project_root, output_root, release_year, release_round, sector_folder) {
-  output_root <- resolve_output_base_path(project_root, output_root)
-  release_parts <- c(release_year, release_round, sector_folder)
-  release_parts <- as.character(release_parts)
-  release_parts <- release_parts[!is.na(release_parts) & nzchar(release_parts)]
-  release_parts <- gsub("[^A-Za-z0-9_-]+", "_", release_parts)
-
-  do.call(file.path, c(list(output_root), as.list(release_parts))) |>
-    normalizePath(winslash = "/", mustWork = FALSE)
+path_context_from_input <- function(input) {
+  list(
+    year = input$release_year,
+    release_year = input$release_year,
+    release = input$release_round,
+    release_round = input$release_round,
+    sector = input$sector
+  )
 }
 
-build_app_output_path <- function(project_root, output_root, release_year, release_round, sector_folder, output_file) {
+render_app_path_template <- function(template, input) {
+  if (is.null(template) || !nzchar(trimws(template))) return("")
+
+  rendered <- trimws(template)
+  context <- path_context_from_input(input)
+
+  for (name in names(context)) {
+    rendered <- gsub(paste0("\\{", name, "\\}"), as.character(context[[name]]), rendered)
+  }
+
+  rendered
+}
+
+resolve_release_path <- function(project_root, releases_root, relative_template, input) {
+  rendered <- render_app_path_template(relative_template, input)
+
+  if (is_absolute_path(rendered)) {
+    return(normalizePath(rendered, winslash = "/", mustWork = FALSE))
+  }
+
+  releases_root <- resolve_output_base_path(project_root, releases_root)
+  normalizePath(file.path(releases_root, rendered), winslash = "/", mustWork = FALSE)
+}
+
+portable_release_path <- function(relative_template) {
+  if (is.null(relative_template) || !nzchar(trimws(relative_template))) {
+    return("{SOPI_RELEASES_ROOT}")
+  }
+
+  relative_template <- trimws(relative_template)
+  if (grepl("^\\{SOPI_RELEASES_ROOT\\}", relative_template)) {
+    return(relative_template)
+  }
+
+  paste0("{SOPI_RELEASES_ROOT}/", gsub("^[/\\\\]+", "", relative_template))
+}
+
+build_output_folder <- function(project_root, releases_root, output_folder_template, input) {
+  resolve_release_path(project_root, releases_root, output_folder_template, input)
+}
+
+build_manual_data_workbook_path <- function(project_root, releases_root, manual_data_workbook_template, input) {
+  resolve_release_path(project_root, releases_root, manual_data_workbook_template, input)
+}
+
+selected_excel_path <- function(input, project_root) {
+  if (isTRUE(input$use_release_sector_workbook)) {
+    return(build_manual_data_workbook_path(
+      project_root = project_root,
+      releases_root = input$releases_root,
+      manual_data_workbook_template = input$manual_data_workbook_template,
+      input = input
+    ))
+  }
+
+  path <- input$excel_path
+  if (is.null(path) || !nzchar(trimws(path))) return(path)
+  if (is_absolute_path(path)) {
+    normalizePath(path, winslash = "/", mustWork = FALSE)
+  } else {
+    normalizePath(file.path(project_root, path), winslash = "/", mustWork = FALSE)
+  }
+}
+
+build_app_output_path <- function(project_root, releases_root, output_folder_template, input, output_file) {
   file.path(
-    build_output_folder(project_root, output_root, release_year, release_round, sector_folder),
+    build_output_folder(project_root, releases_root, output_folder_template, input),
     output_file
   )
 }
@@ -352,6 +441,343 @@ safe_output_delete <- function(path, folder) {
   normalized_path
 }
 
+release_config_path <- function(project_root, release_year, release_round) {
+  round_folder <- gsub("[^A-Za-z0-9_-]+", "_", as.character(release_round))
+  file.path(
+    project_root,
+    "config",
+    "releases",
+    as.character(release_year),
+    round_folder,
+    "chart_config.xlsx"
+  ) |>
+    normalizePath(winslash = "/", mustWork = FALSE)
+}
+
+empty_config_table <- function(columns) {
+  stats::setNames(
+    as.data.frame(rep(list(character()), length(columns)), stringsAsFactors = FALSE),
+    columns
+  )
+}
+
+read_config_table_or_empty <- function(path, sheet, columns) {
+  if (!file.exists(path) || !sheet %in% readxl::excel_sheets(path)) {
+    return(empty_config_table(columns))
+  }
+
+  tbl <- readxl::read_excel(path, sheet = sheet, .name_repair = "unique_quiet")
+  tbl <- as.data.frame(tbl, stringsAsFactors = FALSE)
+
+  for (column in setdiff(columns, names(tbl))) {
+    tbl[[column]] <- NA_character_
+  }
+
+  tbl <- tbl[, columns, drop = FALSE]
+  tbl[] <- lapply(tbl, as.character)
+  tbl
+}
+
+upsert_rows <- function(tbl, rows, key_col, key_value) {
+  tbl <- tbl[is.na(tbl[[key_col]]) | tbl[[key_col]] != key_value, , drop = FALSE]
+  rows <- rows[, names(tbl), drop = FALSE]
+  dplyr::bind_rows(tbl, rows)
+}
+
+upsert_table_by_keys <- function(tbl, rows, key_col) {
+  if (nrow(rows) == 0) return(tbl)
+  tbl <- tbl[is.na(tbl[[key_col]]) | !tbl[[key_col]] %in% rows[[key_col]], , drop = FALSE]
+  rows <- rows[, names(tbl), drop = FALSE]
+  dplyr::bind_rows(tbl, rows)
+}
+
+next_sort_order <- function(plots, sector) {
+  if (nrow(plots) == 0 || !"sort_order" %in% names(plots)) return(1)
+
+  sector_orders <- suppressWarnings(as.numeric(plots$sort_order[plots$sector == sector]))
+  sector_orders <- sector_orders[!is.na(sector_orders)]
+
+  if (length(sector_orders) == 0) 1 else max(sector_orders) + 1
+}
+
+config_value_type <- function(value) {
+  if (is.logical(value)) return("logical")
+  if (is.numeric(value) && length(value) == 1 && !is.na(value) && value == as.integer(value)) return("integer")
+  if (is.numeric(value)) return("numeric")
+  "character"
+}
+
+format_config_value <- function(value) {
+  if (is.null(value) || length(value) == 0) return(NA_character_)
+  if (is.logical(value)) return(ifelse(isTRUE(value), "TRUE", "FALSE"))
+  if (length(value) > 1) return(paste(value, collapse = ","))
+  as.character(value)
+}
+
+args_to_config_rows <- function(id_col, id_value, args, notes = "") {
+  args <- args[!vapply(args, is.null, logical(1))]
+  args <- args[!vapply(args, function(value) {
+    is.character(value) && length(value) == 1 && !nzchar(trimws(value))
+  }, logical(1))]
+
+  columns <- c(id_col, "arg_name", "arg_value", "arg_type", "notes")
+  if (length(args) == 0) return(empty_config_table(columns))
+
+  rows <- data.frame(
+    id = id_value,
+    arg_name = names(args),
+    arg_value = vapply(args, format_config_value, character(1)),
+    arg_type = vapply(args, config_value_type, character(1)),
+    notes = notes,
+    stringsAsFactors = FALSE
+  )
+  names(rows) <- columns
+  rows
+}
+
+build_release_settings_table <- function(input) {
+  values <- list(
+    release_year = input$release_year,
+    release_round = input$release_round,
+    output_root = portable_release_path(input$output_folder_template),
+    manual_data_workbook_template = portable_release_path(input$manual_data_workbook_template),
+    file_type = "svg",
+    family = input$font_family,
+    base_size = input$base_size,
+    overwrite = TRUE
+  )
+
+  notes <- c(
+    release_year = "SOPI release calendar year",
+    release_round = "SOPI release round: June or December",
+    output_root = "Portable graph output folder template",
+    manual_data_workbook_template = "Portable manual data workbook template",
+    file_type = "Runner currently writes SVG",
+    family = "Default chart font family",
+    base_size = "Default chart base font size",
+    overwrite = "Reserved for future use"
+  )
+
+  data.frame(
+    setting_name = names(values),
+    setting_value = vapply(values, format_config_value, character(1)),
+    setting_type = vapply(values, config_value_type, character(1)),
+    notes = unname(notes[names(values)]),
+    stringsAsFactors = FALSE
+  )
+}
+
+build_sector_settings_table <- function(existing = NULL) {
+  columns <- c("sector", "active", "palette", "output_subfolder", "notes")
+
+  if (!is.null(existing) && nrow(existing) > 0) {
+    existing <- existing[, columns, drop = FALSE]
+    missing <- setdiff(sopi_sectors, existing$sector)
+  } else {
+    existing <- empty_config_table(columns)
+    missing <- sopi_sectors
+  }
+
+  if (length(missing) == 0) return(existing)
+
+  dplyr::bind_rows(
+    existing,
+    data.frame(
+      sector = missing,
+      active = "TRUE",
+      palette = NA_character_,
+      output_subfolder = missing,
+      notes = NA_character_,
+      stringsAsFactors = FALSE
+    )
+  )
+}
+
+build_data_source_config <- function(input, data_source_id) {
+  if (identical(input$data_source_type, "function")) {
+    data.frame(
+      data_source_id = data_source_id,
+      source_type = "function",
+      source_ref = NA_character_,
+      sheet = NA_character_,
+      range = NA_character_,
+      data_function = input$data_function,
+      cache = "FALSE",
+      notes = "Created from Shiny app",
+      stringsAsFactors = FALSE
+    )
+  } else {
+    data.frame(
+      data_source_id = data_source_id,
+      source_type = "excel",
+      source_ref = if (isTRUE(input$use_release_sector_workbook)) {
+        portable_release_path(input$manual_data_workbook_template)
+      } else {
+        input$excel_path
+      },
+      sheet = input$excel_sheet,
+      range = if (is_blank(input$excel_range)) NA_character_ else input$excel_range,
+      data_function = NA_character_,
+      cache = "FALSE",
+      notes = "Created from Shiny app",
+      stringsAsFactors = FALSE
+    )
+  }
+}
+
+build_data_args_config <- function(input, data_source_id) {
+  if (!identical(input$data_source_type, "function")) {
+    return(empty_config_table(c("data_source_id", "arg_name", "arg_value", "arg_type", "notes")))
+  }
+
+  args <- merge_args(
+    data_context_args(input),
+    collect_function_arguments(input, input$data_function, "data_arg", data_standard_exclusions()),
+    parse_extra_args(input$data_extra_args)
+  )
+
+  args_to_config_rows("data_source_id", data_source_id, args, "Created from Shiny app")
+}
+
+build_plot_config <- function(input, plot_id, data_source_id, existing_plots) {
+  existing_plot <- existing_plots[existing_plots$plot_id == plot_id, , drop = FALSE]
+  sort_order <- if (nrow(existing_plot) > 0 && !is_blank(existing_plot$sort_order[[1]])) {
+    existing_plot$sort_order[[1]]
+  } else {
+    as.character(next_sort_order(existing_plots, input$sector))
+  }
+
+  data.frame(
+    plot_id = plot_id,
+    sector = input$sector,
+    active = "TRUE",
+    plot_function = input$plot_function,
+    data_source_id = data_source_id,
+    output_file = normalize_svg_filename(input$output_file),
+    title = NA_character_,
+    subtitle = NA_character_,
+    sort_order = sort_order,
+    notes = "Created from Shiny app",
+    stringsAsFactors = FALSE
+  )
+}
+
+build_plot_args_config <- function(input, plot_id) {
+  args <- merge_args(
+    chart_context_args(input),
+    collect_function_arguments(input, input$plot_function, "plot_arg", plot_standard_exclusions()),
+    parse_extra_args(input$plot_extra_args)
+  )
+
+  args$x <- input$x_field
+
+  if (!is_blank(input$group_field)) {
+    args$group <- input$group_field
+  }
+
+  if (!is_blank(input$column_value)) {
+    args$y_col <- input$column_value
+    args$y <- input$column_value
+  }
+
+  if (!is_blank(input$line_value)) {
+    args$y_line <- input$line_value
+  }
+
+  args$x_freq <- input$x_freq
+  args$y_col_label <- input$column_axis_label
+  args$y_line_label <- input$line_axis_label
+  args$col_label <- input$column_legend_label
+  args$line_label <- input$line_legend_label
+  args$col_position <- input$column_position
+  args$forecast <- isTRUE(input$forecast)
+  args$primary_min_breaks <- input$primary_min_breaks
+  args$primary_max_breaks <- input$primary_max_breaks
+  args$secondary_min_breaks <- input$secondary_min_breaks
+  args$secondary_max_breaks <- input$secondary_max_breaks
+  args$width <- input$width
+  args$height <- input$height
+
+  args_to_config_rows("plot_id", plot_id, args, "Created from Shiny app")
+}
+
+write_release_config_from_app <- function(input, project_root, plot_id, data_source_id) {
+  config_path <- release_config_path(project_root, input$release_year, input$release_round)
+  dir.create(dirname(config_path), recursive = TRUE, showWarnings = FALSE)
+
+  sheet_columns <- list(
+    release_settings = c("setting_name", "setting_value", "setting_type", "notes"),
+    settings_sector = c("sector", "active", "palette", "output_subfolder", "notes"),
+    plots = c("plot_id", "sector", "active", "plot_function", "data_source_id", "output_file", "title", "subtitle", "sort_order", "notes"),
+    plot_args = c("plot_id", "arg_name", "arg_value", "arg_type", "notes"),
+    data_sources = c("data_source_id", "source_type", "source_ref", "sheet", "range", "data_function", "cache", "notes"),
+    data_args = c("data_source_id", "arg_name", "arg_value", "arg_type", "notes"),
+    run_control = c("setting_name", "setting_value", "setting_type", "notes"),
+    palettes = c("palette", "item", "hex", "notes")
+  )
+
+  tables <- lapply(names(sheet_columns), function(sheet) {
+    read_config_table_or_empty(config_path, sheet, sheet_columns[[sheet]])
+  })
+  names(tables) <- names(sheet_columns)
+
+  tables$release_settings <- upsert_table_by_keys(
+    tables$release_settings,
+    build_release_settings_table(input),
+    "setting_name"
+  )
+  tables$settings_sector <- build_sector_settings_table(tables$settings_sector)
+  tables$data_sources <- upsert_rows(
+    tables$data_sources,
+    build_data_source_config(input, data_source_id),
+    "data_source_id",
+    data_source_id
+  )
+  tables$data_args <- upsert_rows(
+    tables$data_args,
+    build_data_args_config(input, data_source_id),
+    "data_source_id",
+    data_source_id
+  )
+  tables$plots <- upsert_rows(
+    tables$plots,
+    build_plot_config(input, plot_id, data_source_id, tables$plots),
+    "plot_id",
+    plot_id
+  )
+  tables$plot_args <- upsert_rows(
+    tables$plot_args,
+    build_plot_args_config(input, plot_id),
+    "plot_id",
+    plot_id
+  )
+
+  if (nrow(tables$run_control) == 0) {
+    tables$run_control <- data.frame(
+      setting_name = c("run_all_active", "sector_filter", "plot_id_filter", "dry_run", "save_logs"),
+      setting_value = c("TRUE", NA_character_, NA_character_, "FALSE", "TRUE"),
+      setting_type = c("logical", "character_vector", "character_vector", "logical", "logical"),
+      notes = c(
+        "Run active plots in active sectors",
+        "Optional comma-separated sectors",
+        "Optional comma-separated plot IDs",
+        "Validate and build plots without saving SVGs",
+        "Write logs/chart_run_log.csv"
+      ),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  wb <- openxlsx::createWorkbook()
+  for (sheet in names(tables)) {
+    openxlsx::addWorksheet(wb, sheet)
+    openxlsx::writeData(wb, sheet, tables[[sheet]], withFilter = TRUE)
+  }
+
+  openxlsx::saveWorkbook(wb, config_path, overwrite = TRUE)
+  config_path
+}
+
 first_matching_field <- function(fields, pattern) {
   matches <- fields[grepl(pattern, fields, ignore.case = TRUE)]
   if (length(matches) == 0) "" else matches[[1]]
@@ -368,10 +794,7 @@ build_data <- function(input) {
     )
     call_named_function(input$data_function, args)
   } else {
-    path <- input$excel_path
-    if (!grepl("^([A-Za-z]:)?[/\\\\]", path)) {
-      path <- file.path(project_root, path)
-    }
+    path <- selected_excel_path(input, project_root)
 
     if (!file.exists(path)) {
       stop("Excel data file not found: ", path, call. = FALSE)
@@ -439,10 +862,6 @@ build_plot <- function(input, data) {
 data_standard_exclusions <- function() {
   c(
     "sector",
-    "historical_start_year",
-    "historical_end_year",
-    "year_start",
-    "year_end",
     "project_root"
   )
 }
@@ -515,14 +934,19 @@ ui <- fluidPage(
         column(
           7,
           wellPanel(
-            h4("Output"),
+            h4("SharePoint Paths"),
             textInput(
-              "output_root",
-              "SharePoint output base folder",
-              value = normalizePath(file.path(project_root, "outputs"), winslash = "/", mustWork = FALSE)
+              "releases_root",
+              "Local SOPI releases root",
+              value = default_releases_root(project_root)
             ),
-            tags$p(class = "sopi-note", "Paste the synced SharePoint folder path. The app adds year, release, and sector folders below it."),
-            textInput("output_file", "SVG filename", value = "preview_chart.svg"),
+            tags$p(class = "sopi-note", "This is the local synced SharePoint root on your machine. It is not saved into chart_config.xlsx."),
+            textInput(
+              "manual_data_workbook_template",
+              "Manual data workbook template",
+              value = "{year}/{release}/Data/{sector}/{sector}.xlsx"
+            ),
+            tags$p(class = "sopi-note", "Templates can use {year}, {release}, and {sector}. Config files save these as portable {SOPI_RELEASES_ROOT} paths."),
             actionButton("refresh_output_files", "Refresh Output Files"),
             tags$p(class = "sopi-note", "Current chart output folder:"),
             verbatimTextOutput("resolved_output_folder")
@@ -560,9 +984,6 @@ ui <- fluidPage(
           4,
           wellPanel(
             radioButtons("data_source_type", "Data source", choices = c("R function" = "function", "Excel sheet" = "excel")),
-            h4("Data period"),
-            numericInput("historical_start_year", "Historical start year", value = 2019, min = 1990),
-            numericInput("historical_end_year", "Historical end year", value = 2030, min = 1990),
             conditionalPanel(
               "input.data_source_type == 'function'",
               selectInput("data_function", "Data function", choices = data_function_names),
@@ -571,8 +992,14 @@ ui <- fluidPage(
             ),
             conditionalPanel(
               "input.data_source_type == 'excel'",
-              textInput("excel_path", "Excel file path", value = "data/raw/manual_data.xlsx"),
-              textInput("excel_sheet", "Sheet", value = ""),
+              checkboxInput("use_release_sector_workbook", "Use release/sector SharePoint workbook", value = TRUE),
+              tags$p(class = "sopi-note", "Workbook path:"),
+              verbatimTextOutput("resolved_excel_path"),
+              conditionalPanel(
+                "!input.use_release_sector_workbook",
+                textInput("excel_path", "Custom Excel file path", value = "")
+              ),
+              uiOutput("excel_sheet_selector"),
               textInput("excel_range", "Range, optional", value = "")
             ),
             actionButton("load_data", "Load Data", class = "btn-primary")
@@ -604,7 +1031,7 @@ ui <- fluidPage(
           wellPanel(
             h4("Notes"),
             tags$p(class = "sopi-note", "These settings are common chart styling defaults. They are used when previewing and saving charts, regardless of the selected plot function."),
-            tags$p(class = "sopi-note", "Chart-specific labels, axes, forecast settings, and extra arguments remain in the Chart tab. SVG export size is set in Preview And Save.")
+            tags$p(class = "sopi-note", "Chart-specific labels, axes, forecast settings, SVG export size, preview, and save controls are in the Chart tab.")
           )
         )
       )
@@ -652,30 +1079,42 @@ ui <- fluidPage(
               column(6, numericInput("secondary_min_breaks", "Secondary min breaks", value = 4, min = 2)),
               column(6, numericInput("secondary_max_breaks", "Secondary max breaks", value = 6, min = 2))
             ),
-            textAreaInput("plot_extra_args", "Extra plot arguments", rows = 3),
-            actionButton("preview_plot", "Preview Chart", class = "btn-primary")
+            textAreaInput("plot_extra_args", "Extra plot arguments", rows = 3)
           )
         )
-      )
-    ),
-    tabPanel(
-      "Preview And Save",
+      ),
       fluidRow(
         column(
-          9,
+          8,
           wellPanel(
-            plotOutput("chart_preview", height = "calc(100vh - 180px)")
+            h4("Preview"),
+            actionButton("refresh_preview", "Refresh Preview", class = "btn-primary"),
+            tags$p(class = "sopi-note", "Click after changing chart parameters or SVG size to rebuild the visual preview."),
+            uiOutput("chart_preview_ui")
           )
         ),
         column(
-          3,
+          4,
           wellPanel(
             h4("Save SVG"),
+            textInput(
+              "output_folder_template",
+              "Graph output folder template",
+              value = "{year}/{release}/Graphs/{sector}"
+            ),
+            textInput("output_file", "SVG filename", value = "preview_chart.svg"),
+            tags$p(class = "sopi-note", "Resolved SVG save path:"),
+            verbatimTextOutput("resolved_svg_path"),
             tags$p(class = "sopi-note", "Export size for this saved SVG."),
             fluidRow(
               column(6, numericInput("width", "Width", value = 9, min = 3, step = 0.5)),
               column(6, numericInput("height", "Height", value = 5, min = 3, step = 0.5))
             ),
+            textInput("plot_id", "Plot ID", value = "preview_chart"),
+            textInput("data_source_id", "Data source ID", value = "preview_chart_data"),
+            checkboxInput("update_chart_config", "Update release chart_config.xlsx", value = TRUE),
+            tags$p(class = "sopi-note", "Existing matching IDs are updated; new IDs are appended."),
+            verbatimTextOutput("config_path_preview"),
             actionButton("save_svg", "Save Confirmed Chart", class = "btn-success"),
             tags$hr(),
             verbatimTextOutput("save_status")
@@ -692,22 +1131,25 @@ server <- function(input, output, session) {
   output_folder <- reactive({
     build_output_folder(
       project_root = project_root,
-      output_root = input$output_root,
-      release_year = input$release_year,
-      release_round = input$release_round,
-      sector_folder = input$sector
+      releases_root = input$releases_root,
+      output_folder_template = input$output_folder_template,
+      input = input
     )
   })
 
   output_files <- reactive({
     output_refresh()
-    input$output_root
+    input$releases_root
+    input$output_folder_template
     list_output_files(output_folder())
   })
 
-  observeEvent(input$output_root, {
+  observeEvent(list(input$releases_root, input$output_folder_template, input$manual_data_workbook_template), {
+    if (!is.null(input$releases_root) && nzchar(trimws(input$releases_root))) {
+      Sys.setenv(SOPI_RELEASES_ROOT = normalizePath(input$releases_root, winslash = "/", mustWork = FALSE))
+    }
     output_refresh(output_refresh() + 1)
-  }, ignoreInit = TRUE)
+  })
 
   observeEvent(list(input$release_year, input$release_round, input$sector), {
     output_refresh(output_refresh() + 1)
@@ -715,6 +1157,50 @@ server <- function(input, output, session) {
 
   output$resolved_output_folder <- renderText({
     output_folder()
+  })
+
+  output$resolved_excel_path <- renderText({
+    selected_excel_path(input, project_root)
+  })
+
+  excel_sheets <- reactive({
+    path <- selected_excel_path(input, project_root)
+    if (is.null(path) || !nzchar(trimws(path)) || !file.exists(path)) {
+      return(character())
+    }
+
+    tryCatch(
+      readxl::excel_sheets(path),
+      error = function(e) character()
+    )
+  })
+
+  output$excel_sheet_selector <- renderUI({
+    sheets <- excel_sheets()
+
+    if (length(sheets) == 0) {
+      return(tags$p(class = "sopi-note", "No sheets found. Check that the workbook exists and is closed if SharePoint is syncing it."))
+    }
+
+    selectInput("excel_sheet", "Sheet", choices = sheets, selected = sheets[[1]])
+  })
+
+  output$config_path_preview <- renderText({
+    release_config_path(project_root, input$release_year, input$release_round)
+  })
+
+  resolved_svg_path <- reactive({
+    build_app_output_path(
+      project_root = project_root,
+      releases_root = input$releases_root,
+      output_folder_template = input$output_folder_template,
+      input = input,
+      output_file = normalize_svg_filename(input$output_file)
+    )
+  })
+
+  output$resolved_svg_path <- renderText({
+    resolved_svg_path()
   })
 
   observeEvent(input$refresh_output_files, {
@@ -836,9 +1322,24 @@ server <- function(input, output, session) {
     )
   })
 
-  preview_plot <- eventReactive(input$preview_plot, {
+  preview_plot <- eventReactive(input$refresh_preview, {
     req(loaded_data())
     build_plot(input, loaded_data())
+  })
+
+  preview_height_px <- reactive({
+    width <- suppressWarnings(as.numeric(input$width))
+    height <- suppressWarnings(as.numeric(input$height))
+
+    if (is.na(width) || width <= 0 || is.na(height) || height <= 0) {
+      return(420)
+    }
+
+    max(320, min(700, round(520 * height / width)))
+  })
+
+  output$chart_preview_ui <- renderUI({
+    plotOutput("chart_preview", height = paste0(preview_height_px(), "px"))
   })
 
   output$chart_preview <- renderPlot({
@@ -846,34 +1347,56 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$save_svg, {
-    plot <- preview_plot()
-    req(plot)
+    data <- tryCatch(loaded_data(), error = function(e) NULL)
+    if (is.null(data)) {
+      output$save_status <- renderText("Save failed: load data first in the Data tab.")
+      return()
+    }
 
-    output_root <- input$output_root
-    output_file <- input$output_file
-    sector_folder <- input$sector
+    output_file <- normalize_svg_filename(input$output_file)
+    plot_id <- safe_config_id(input$plot_id, fallback = safe_config_id(output_file, "chart"))
+    data_source_id <- safe_config_id(input$data_source_id, fallback = paste0(plot_id, "_data"))
+    output_path <- resolved_svg_path()
 
-    output_path <- build_app_output_path(
-      project_root = project_root,
-      output_root = output_root,
-      release_year = input$release_year,
-      release_round = input$release_round,
-      sector_folder = sector_folder,
-      output_file = output_file
-    )
+    result <- tryCatch({
+      plot <- build_plot(input, data)
 
-    save_chart_svg(
-      plot = plot,
-      output_path = output_path,
-      width = input$width,
-      height = input$height
-    )
+      save_chart_svg(
+        plot = plot,
+        output_path = output_path,
+        width = input$width,
+        height = input$height
+      )
 
-    output$save_status <- renderText({
-      paste("Saved:", output_path)
+      config_path <- NULL
+      if (isTRUE(input$update_chart_config)) {
+        config_path <- write_release_config_from_app(
+          input = input,
+          project_root = project_root,
+          plot_id = plot_id,
+          data_source_id = data_source_id
+        )
+      }
+
+      list(ok = TRUE, output_path = output_path, config_path = config_path)
+    }, error = function(e) {
+      list(ok = FALSE, message = conditionMessage(e), output_path = output_path)
     })
 
-    output_refresh(output_refresh() + 1)
+    if (isTRUE(result$ok)) {
+      output$save_status <- renderText({
+        lines <- paste("Saved SVG:", result$output_path)
+        if (!is.null(result$config_path)) {
+          lines <- c(lines, paste("Updated config:", result$config_path))
+        }
+        paste(lines, collapse = "\n")
+      })
+      output_refresh(output_refresh() + 1)
+    } else {
+      output$save_status <- renderText({
+        paste("Save failed:", result$message, "\nTarget SVG:", result$output_path)
+      })
+    }
   })
 }
 
