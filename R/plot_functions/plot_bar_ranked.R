@@ -10,6 +10,7 @@ plot_bar_ranked <- function(
     y_label = NULL,
     palette = NULL,
     family = "DIN",
+    base_size = 10.5,
     sort_desc = TRUE,
     ...
 ) {
@@ -35,7 +36,7 @@ plot_bar_ranked <- function(
       x = x_label,
       y = y_label
     ) +
-    theme_sopi(family = family) +
+    theme_sopi(family = family, base_size = base_size) +
     ggplot2::theme(
       legend.title = ggplot2::element_blank(),
       panel.grid.major.x = ggplot2::element_line(color = "#eeeeee"),

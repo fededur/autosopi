@@ -2,9 +2,9 @@
 
 SOPI Graphs is a small R project for creating SOPI charts as SVG files.
 
-It is designed to work from a SharePoint-synced folder. There is no Shiny app, no server, and no database.
+It is designed to work from a SharePoint-synced folder. The Shiny app runs locally on the user's machine; there is no server and no database.
 
-Most users should control the charts from Excel. R reads the Excel config and creates the final SVG files.
+Most users can control charts from either the Shiny app or the Excel config builder. R creates the final SVG files.
 
 ## What It Is For
 
@@ -26,15 +26,26 @@ Data can come from:
 - an Excel sheet
 - an R data function
 
-Outputs are saved by release and sector, for example:
+Outputs are usually saved to a SharePoint-synced output folder outside the project.
+The app still organises them by release and sector, for example:
 
 ```text
-outputs/2026/June/Seafood/seafood_fig_1.svg
+<SharePoint output folder>/2026/June/Seafood/seafood_fig_1.svg
 ```
 
 ## Normal Workflow
 
-For most users, the workflow is:
+For the Shiny workflow:
+
+1. Run the local Shiny app.
+2. Set up the SOPI release and output folder in `Overview`.
+3. Select or load the chart data and data period in `Data`.
+4. Set common chart appearance in `General Style`.
+5. Select the plot function and chart-specific arguments in `Chart`.
+6. Preview the chart.
+7. Save the confirmed SVG.
+
+For the Excel config workflow:
 
 1. Open the config builder workbook.
 2. Set up the SOPI release, for example `2026` and `June`.
@@ -69,7 +80,7 @@ config/releases/
 Chart outputs are saved like this:
 
 ```text
-outputs/
+<SharePoint output folder>/
   2026/
     June/
       Seafood/
@@ -143,6 +154,33 @@ When adding a chart, the sector is selected from the standard SOPI sector list: 
 Adding a chart or data source appends a new row unless the ID already exists. If the ID exists, the builder asks before replacing that row. Delete buttons remove unwanted rows from the friendly sheets before the release config is rebuilt and exported.
 
 `Refresh Plot List` writes a current plot summary by sector onto the `START HERE` sheet.
+
+## Using The Shiny App
+
+Run the app from the project root:
+
+```r
+source("run_shiny_app.R")
+```
+
+The app has five tabs:
+
+`Overview`
+: Set release, sector, output file, and the SharePoint output base folder. This tab shows the resolved chart output folder, lists SVGs already available for the selected release and sector, previews selected outputs, and allows unwanted output files to be deleted.
+
+`Data`
+: Choose an R data function or Excel sheet, set the data period, and preview the loaded data.
+
+`General Style`
+: Set common chart style settings such as font family and base font size. These settings apply across chart types.
+
+`Chart`
+: Choose the plot function, forecast settings, fields, and chart-specific arguments.
+
+`Preview And Save`
+: Review the chart, set the SVG export width and height, and save the confirmed SVG.
+
+The output base folder should normally be the synced SharePoint folder where final SOPI SVGs are stored. Users paste the full folder path into `SharePoint output base folder`. SOPI Graphs then appends release year, release round, and sector to create the current chart output folder. The output file list on `Overview` lets users inspect existing outputs in that folder. SVG files can be previewed in the app. A selected output file can be deleted after ticking the delete confirmation box.
 
 ## Running The Charts
 
@@ -254,6 +292,7 @@ install.packages(c(
   "readxl",
   "rlang",
   "scales",
+  "shiny",
   "svglite",
   "tidyr"
 ))
@@ -261,8 +300,9 @@ install.packages(c(
 
 ## SharePoint Notes
 
-- Keep paths relative to the project root.
-- Store the project, configs, metadata, data, and outputs in SharePoint.
+- Store the project, configs, metadata, and data in SharePoint.
+- Store final chart outputs in a SharePoint-synced output folder selected in the Shiny app.
+- The output folder can be outside the R project folder.
 - Use one config per SOPI year and release round.
 - Avoid separate user folders unless the team later needs them.
 - If two users run the same release at the same time, the latest saved SVG will overwrite the previous one.

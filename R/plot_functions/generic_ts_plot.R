@@ -29,7 +29,8 @@ generic_ts_plot <- function(
     forecast_max_mult = 1.1,
     forecast_label_pos = 0.9,
     col_position = c("stacked", "dodge"),
-    family = "DIN", 
+    family = "DIN",
+    base_size = 10.5,
     sort_col = c("none", "asc", "desc"),
     sort_line = c("none", "asc", "desc")
     
@@ -523,7 +524,7 @@ generic_ts_plot <- function(
   # THEME
   # =========================
   p <- p +
-    theme_sopi(family = family) +
+    theme_sopi(family = family, base_size = base_size) +
     theme(
       axis.line = element_blank(),
       axis.line.x = element_line(colour = "#dad9d9"), 
