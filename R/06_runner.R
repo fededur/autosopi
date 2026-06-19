@@ -94,7 +94,7 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
     args$palette_line <- NULL
   }
 
-  palette_arg_names <- c("palette", "palette_fill", "palette_line", "fill_palette", "colour_palette")
+  palette_arg_names <- sopi_palette_arg_names(include_aliases = TRUE)
   for (arg_name in intersect(palette_arg_names, names(args))) {
     args[[arg_name]] <- resolve_palette_arg(args[[arg_name]], config, metadata_resource)
   }

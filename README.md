@@ -312,6 +312,12 @@ The basic steps are:
 
 ## For R Users
 
+The formal plotting contract is documented here:
+
+```text
+docs/SOPI_PLOTTING_PROTOCOL.md
+```
+
 Add new plot functions here:
 
 ```text
@@ -321,10 +327,28 @@ R/plot_functions/
 A plot function should:
 
 - accept `data` as the first argument
-- use column names passed as text
-- accept shared styling arguments such as `palette`, `palette_fill`, `palette_line`, and `labels`
+- be named `plot_*`
+- use column names passed as character strings
+- use standard field arguments such as `x`, `y`, `y_col`, `y_line`, `group`, `driver`, and `total`
+- use standard label arguments such as `x_label`, `y_label`, `y_col_label`, `y_line_label`, `col_label`, `line_label`, and `labels`
+- use standard colour arguments such as `palette`, `palette_fill`, and `palette_line`
+- use `family` and `base_size` for typography
 - return a ggplot object
 - not save files itself
+
+Supported legacy aliases include `date_var`, `y_lab`, `fontsize`, `fill_palette`, and `colour_palette`, but new functions should use the standard names.
+
+To check plot function compatibility from R:
+
+```r
+source("R/00_packages.R")
+source("R/01_utils.R")
+source("R/02_styling.R")
+source("R/07_plot_protocol.R")
+source_directory("R/plot_functions")
+
+sopi_plot_protocol_report()
+```
 
 Add new data functions here:
 

@@ -6,6 +6,7 @@ source(file.path(project_root, "R", "02_styling.R"))
 source(file.path(project_root, "R", "03_config.R"))
 source(file.path(project_root, "R", "04_data_sources.R"))
 source(file.path(project_root, "R", "05_outputs.R"))
+source(file.path(project_root, "R", "07_plot_protocol.R"))
 source(file.path(project_root, "R", "06_runner.R"))
 
 source_directory(file.path(project_root, "R", "data_functions"))

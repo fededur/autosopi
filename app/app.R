@@ -45,6 +45,7 @@ source(file.path(project_root, "R", "02_styling.R"))
 source(file.path(project_root, "R", "03_config.R"))
 source(file.path(project_root, "R", "04_data_sources.R"))
 source(file.path(project_root, "R", "05_outputs.R"))
+source(file.path(project_root, "R", "07_plot_protocol.R"))
 source(file.path(project_root, "R", "06_runner.R"))
 
 source_directory(file.path(project_root, "R", "data_functions"))
@@ -235,10 +236,7 @@ add_palette_args_for_function <- function(args, palette, function_name) {
   if (is.null(palette)) return(args)
 
   fn_formals <- names(formals(get(function_name, mode = "function")))
-  palette_args <- intersect(
-    c("palette", "palette_fill", "palette_line", "fill_palette", "colour_palette"),
-    fn_formals
-  )
+  palette_args <- intersect(sopi_palette_arg_names(include_aliases = TRUE), fn_formals)
 
   for (arg_name in palette_args) {
     args[[arg_name]] <- palette
@@ -1042,40 +1040,12 @@ data_standard_exclusions <- function() {
 }
 
 plot_standard_exclusions <- function() {
-  c(
-    "data",
-    "x",
-    "date_var",
-    "y",
-    "y_col",
-    "y_line",
-    "group",
-    "driver",
-    "total",
-    "x_freq",
-    "family",
-    "base_size",
-    "fontsize",
-    "forecast",
-    "forecast_start",
-    "forecast_end",
-    "palette",
-    "palette_fill",
-    "palette_line",
-    "fill_palette",
-    "colour_palette",
-    "labels",
-    "y_col_label",
-    "y_line_label",
-    "y_lab",
-    "col_label",
-    "line_label",
+  unique(c(
+    sopi_plot_standard_arg_names(include_aliases = TRUE),
     "col_position",
-    "primary_min_breaks",
-    "primary_max_breaks",
-    "secondary_min_breaks",
-    "secondary_max_breaks"
-  )
+    "line_label",
+    "col_label"
+  ))
 }
 
 ui <- fluidPage(
