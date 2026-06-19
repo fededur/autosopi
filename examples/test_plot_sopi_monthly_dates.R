@@ -47,7 +47,7 @@ monthly_data <- expand.grid(
 
 seafood_palette <- complete_palette(unique(monthly_data$product), seafood_palette)
 
-p_monthly <- generic_ts_plot(
+p_monthly <- plot_generic_ts(
   data = monthly_data,
   x = "date",
   x_freq = "monthly",
@@ -63,8 +63,8 @@ p_monthly <- generic_ts_plot(
   secondary_max_breaks = 6,
   col_position = "stacked"
 )
-
-p_monthly_forecast <- generic_ts_plot(
+library(lubridate)
+p_monthly_forecast <- plot_generic_ts(
   data = monthly_data,
   x = "date",
   x_freq = "monthly",
@@ -80,8 +80,8 @@ p_monthly_forecast <- generic_ts_plot(
   secondary_min_breaks = 5,
   secondary_max_breaks = 7,
   forecast = TRUE,
-  forecast_start = as.Date("2025-01-01"),
-  forecast_end = as.Date("2025-12-01"),
+  forecast_start = "2025-01-01",
+  forecast_end = "2025-12-01",
   forecast_label = "Forecast",
   col_position = "stacked"
 )
@@ -105,4 +105,30 @@ ggsave(
   width = 11,
   height = 6,
   device = svglite::svglite
+)
+
+
+arable <- readxl::read_excel("data/raw/manual_data.xlsx", sheet = "arable_monthly_fig_1")
+
+
+plot_generic_ts(
+  data = arable,
+  x = "date",
+  x_freq = "quarterly",
+  y_line = "revenue",
+  #y_col = "export_volume_tonnes",
+  group = "category",
+  y_line_label = "Export revenue (NZ$)"#,
+  #y_col_label = "Export volume (tonnes)",
+  #palette_line = arable_palette,
+  #palette_fill = scales::alpha(seafood_palette, 0.6),
+  #primary_min_breaks = 3,
+  #primary_max_breaks = 5,
+  #secondary_min_breaks = 5,
+  #secondary_max_breaks = 7,
+  # forecast = TRUE,
+  # forecast_start = "2025-01-01",
+  # forecast_end = "2025-12-01",
+  # forecast_label = "Forecast",
+  # col_position = "stacked"
 )

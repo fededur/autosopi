@@ -5,8 +5,8 @@ library(grid)
 library(svglite)
 
 source(file.path("R", "02_styling.R"))
-source(file.path("R", "data_functions", "prep_fake_meat_wool_timeseries.R"))
-source(file.path("R", "plot_functions", "generic_ts_plot.R"))
+source(file.path("R", "data_functions", "to_delete","prep_fake_meat_wool_timeseries.R"))
+#source(file.path("R", "plot_functions", "generic_ts_plot.R"))
 
 meat_wool_data <- prep_fake_meat_wool_timeseries(
   historical_start_year = 2019,
@@ -25,7 +25,7 @@ meat_wool_style <- style_from_metadata(
   fill = "actual"
 )
 
-p_meat_wool <- generic_ts_plot(
+p_meat_wool <- plot_generic_ts(
   data = meat_wool_data,
   x = "year",
   x_freq = "yearly",

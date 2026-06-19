@@ -1,4 +1,4 @@
-generic_ts_plot <- function(
+plot_generic_ts <- function(
     data,
     x,
     x_freq = c("auto", "yearly", "quarterly", "monthly"),
@@ -99,8 +99,6 @@ generic_ts_plot <- function(
       dplyr::arrange(if (sort_col == "asc") val else -val) |>
       dplyr::pull(.data[[group_name]])
   }
-  
-  
   
   if (has_line && sort_line != "none") {
     line_vals <- df |>
@@ -436,12 +434,12 @@ generic_ts_plot <- function(
         name = y_line_label,
         limits = c(0, upper_limit),
         breaks = axis_line$breaks,
-        labels = line_labeller,#scales::label_number(big.mark = ","),
+        labels = line_labeller,
         expand = c(0, 0),
         sec.axis = sec_axis(~ . / scale_factor,
                             name = y_col_label,
                             breaks = axis_col$breaks,
-                            labels = col_labeller)#scales::label_number(big.mark = ","))
+                            labels = col_labeller)
       )
   } else if (has_line) {
     p <- p +
@@ -449,7 +447,7 @@ generic_ts_plot <- function(
         name = y_line_label,
         limits = c(0, upper_limit),
         breaks = axis_line$breaks,
-        labels = line_labeller,#scales::label_number(big.mark = ","),
+        labels = line_labeller,
         expand = c(0, 0)
       )
   } else {
@@ -458,7 +456,7 @@ generic_ts_plot <- function(
         name = y_col_label,
         limits = c(0, upper_limit),
         breaks = axis_col$breaks,
-        labels = col_labeller,#scales::label_number(big.mark = ","),
+        labels = col_labeller,
         expand = c(0, 0)
       )
   }
@@ -568,5 +566,5 @@ generic_ts_plot <- function(
   return(p)
 }
 
-plot_sopi <- generic_ts_plot
+#plot_sopi <- generic_ts_plot
 

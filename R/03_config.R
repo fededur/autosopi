@@ -71,7 +71,7 @@ validate_config <- function(config) {
 
   missing_sources <- setdiff(config$plots$data_source_id, config$data_sources$data_source_id)
   if (length(missing_sources) > 0) {
-    stop("Plot rows reference missing data_source_id values: ", paste(missing_sources, collapse = ", "), call. = FALSE)
+    warning("Plot rows reference missing data_source_id values: ", paste(missing_sources, collapse = ", "), call. = FALSE)
   }
 
   invisible(TRUE)
