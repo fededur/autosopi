@@ -1,10 +1,14 @@
 required_packages <- c(
   "dplyr",
+  "forcats",
   "ggplot2",
+  "lubridate",
+  "openxlsx",
   "readxl",
   "rlang",
   "scales",
   "svglite",
+  "tibble",
   "tidyr"
 )
 

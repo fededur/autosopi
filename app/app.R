@@ -1,4 +1,4 @@
-required_app_packages <- c("shiny", "dplyr", "ggplot2", "openxlsx", "readxl", "scales", "svglite")
+required_app_packages <- c("shiny", "dplyr", "forcats", "ggplot2", "lubridate", "openxlsx", "readxl", "rlang", "scales", "svglite", "tibble", "tidyr")
 missing_app_packages <- required_app_packages[
   !vapply(required_app_packages, requireNamespace, logical(1), quietly = TRUE)
 ]
@@ -107,6 +107,11 @@ data_function_names <- list_r_function_names(
   file.path(project_root, "R", "data_functions"),
   include_plot_aliases = FALSE
 )
+data_function_names <- data_function_names[vapply(data_function_names, function(function_name) {
+  if (!exists(function_name, mode = "function")) return(FALSE)
+  first_arg <- names(formals(get(function_name, mode = "function")))[[1]]
+  !identical(first_arg, "data")
+}, logical(1))]
 
 parse_extra_args <- function(text) {
   if (is.null(text) || !nzchar(trimws(text))) return(list())
@@ -140,6 +145,106 @@ parse_guess <- function(value) {
   if (!is.na(numeric_value) && grepl("^-?[0-9.]+$", value)) return(numeric_value)
 
   value
+}
+
+is_hex_colour <- function(value) {
+  grepl("^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$", trimws(value))
+}
+
+parse_custom_palette_text <- function(text) {
+  if (is.null(text) || !nzchar(trimws(text))) return(character())
+
+  lines <- trimws(strsplit(text, "\n", fixed = TRUE)[[1]])
+  lines <- lines[nzchar(lines) & !startsWith(lines, "#")]
+
+  items <- character()
+  colours <- character()
+
+  for (line in lines) {
+    parts <- if (grepl("=", line, fixed = TRUE)) {
+      strsplit(line, "=", fixed = TRUE)[[1]]
+    } else {
+      strsplit(line, ",", fixed = TRUE)[[1]]
+    }
+
+    if (length(parts) < 2) next
+
+    item <- trimws(parts[[1]])
+    colour <- trimws(paste(parts[-1], collapse = if (grepl("=", line, fixed = TRUE)) "=" else ","))
+
+    if (!nzchar(item) || !nzchar(colour)) next
+    if (!is_hex_colour(colour)) {
+      stop("Invalid hex colour for '", item, "': ", colour, call. = FALSE)
+    }
+
+    items <- c(items, item)
+    colours <- c(colours, colour)
+  }
+
+  if (length(items) == 0) return(character())
+
+  palette <- stats::setNames(colours, items)
+  palette[!duplicated(names(palette))]
+}
+
+format_palette_text <- function(palette) {
+  if (is.null(palette) || length(palette) == 0) return("")
+  paste(paste(names(palette), unname(palette), sep = " = "), collapse = "\n")
+}
+
+palette_choices_from_metadata <- function(metadata_resource) {
+  if (is.null(metadata_resource) || is.null(metadata_resource$custom_palettes)) {
+    return(character())
+  }
+
+  palettes <- unique(metadata_resource$custom_palettes$palette)
+  sort(palettes[!is.na(palettes) & nzchar(palettes)])
+}
+
+selected_palette_name <- function(input) {
+  mode <- input$palette_mode %||% "metadata"
+
+  if (identical(mode, "saved")) {
+    name <- input$saved_palette
+  } else if (identical(mode, "custom")) {
+    name <- input$custom_palette_name
+  } else {
+    name <- NULL
+  }
+
+  if (is.null(name) || !nzchar(trimws(name))) NULL else trimws(name)
+}
+
+custom_palette_for_preview <- function(input, data = NULL) {
+  mode <- input$palette_mode %||% "metadata"
+
+  if (identical(mode, "custom")) {
+    palette <- parse_custom_palette_text(input$custom_palette_text)
+    if (length(palette) == 0) return(NULL)
+    return(palette)
+  }
+
+  if (identical(mode, "saved")) {
+    return(selected_palette_name(input))
+  }
+
+  NULL
+}
+
+add_palette_args_for_function <- function(args, palette, function_name) {
+  if (is.null(palette)) return(args)
+
+  fn_formals <- names(formals(get(function_name, mode = "function")))
+  palette_args <- intersect(
+    c("palette", "palette_fill", "palette_line", "fill_palette", "colour_palette"),
+    fn_formals
+  )
+
+  for (arg_name in palette_args) {
+    args[[arg_name]] <- palette
+  }
+
+  args
 }
 
 safe_input_id <- function(prefix, arg_name) {
@@ -176,7 +281,7 @@ formal_default_text <- function(function_name, arg_name) {
     return(default)
   }
 
-  paste(deparse(default), collapse = " ")
+  ""
 }
 
 function_argument_inputs <- function(function_name, prefix, exclude) {
@@ -237,6 +342,7 @@ chart_context_args <- function(input) {
     sector = input$sector,
     family = input$font_family,
     base_size = input$base_size,
+    fontsize = input$base_size,
     forecast_start_year = input$forecast_start_year,
     forecast_end_year = input$forecast_end_year,
     forecast_start = input$forecast_start_year,
@@ -669,7 +775,15 @@ build_plot_args_config <- function(input, plot_id) {
     parse_extra_args(input$plot_extra_args)
   )
 
+  palette_name <- selected_palette_name(input)
+  if (!is.null(palette_name)) {
+    args <- add_palette_args_for_function(args, palette_name, input$plot_function)
+  } else {
+    args$use_metadata_palette <- TRUE
+  }
+
   args$x <- input$x_field
+  args$date_var <- input$x_field
 
   if (!is_blank(input$group_field)) {
     args$group <- input$group_field
@@ -684,9 +798,18 @@ build_plot_args_config <- function(input, plot_id) {
     args$y_line <- input$line_value
   }
 
+  if (!is.null(input$driver_field) && !is_blank(input$driver_field)) {
+    args$driver <- input$driver_field
+  }
+
+  if (!is.null(input$total_field) && !is_blank(input$total_field)) {
+    args$total <- input$total_field
+  }
+
   args$x_freq <- input$x_freq
   args$y_col_label <- input$column_axis_label
   args$y_line_label <- input$line_axis_label
+  args$y_lab <- input$column_axis_label
   args$col_label <- input$column_legend_label
   args$line_label <- input$line_legend_label
   args$col_position <- input$column_position
@@ -699,6 +822,31 @@ build_plot_args_config <- function(input, plot_id) {
   args$height <- input$height
 
   args_to_config_rows("plot_id", plot_id, args, "Created from Shiny app")
+}
+
+build_selected_palette_rows <- function(input, metadata_resource) {
+  palette_name <- selected_palette_name(input)
+  if (is.null(palette_name)) {
+    return(empty_config_table(c("palette", "item", "hex", "notes")))
+  }
+
+  if (identical(input$palette_mode, "custom")) {
+    palette <- parse_custom_palette_text(input$custom_palette_text)
+  } else {
+    palette <- palette_from_custom_metadata(metadata_resource, palette_name)
+  }
+
+  if (is.null(palette) || length(palette) == 0) {
+    return(empty_config_table(c("palette", "item", "hex", "notes")))
+  }
+
+  data.frame(
+    palette = palette_name,
+    item = names(palette),
+    hex = unname(palette),
+    notes = "Copied from metadata custom_palettes by Shiny app",
+    stringsAsFactors = FALSE
+  )
 }
 
 write_release_config_from_app <- function(input, project_root, plot_id, data_source_id) {
@@ -751,6 +899,15 @@ write_release_config_from_app <- function(input, project_root, plot_id, data_sou
     "plot_id",
     plot_id
   )
+  selected_palette_rows <- build_selected_palette_rows(input, load_metadata_resource(project_root))
+  if (nrow(selected_palette_rows) > 0) {
+    tables$palettes <- upsert_rows(
+      tables$palettes,
+      selected_palette_rows,
+      "palette",
+      selected_palette_rows$palette[[1]]
+    )
+  }
 
   if (nrow(tables$run_control) == 0) {
     tables$run_control <- data.frame(
@@ -815,18 +972,27 @@ build_plot <- function(input, data) {
     collect_function_arguments(input, input$plot_function, "plot_arg", plot_standard_exclusions()),
     parse_extra_args(input$plot_extra_args)
   )
+  fn_formals <- names(formals(get(input$plot_function, mode = "function")))
+  preview_palette <- custom_palette_for_preview(input, data)
+
+  if (!is.null(preview_palette)) {
+    args <- add_palette_args_for_function(args, preview_palette, input$plot_function)
+  } else {
+    args$use_metadata_palette <- TRUE
+  }
 
   args$x <- input$x_field
+  args$date_var <- input$x_field
 
   if (!is_blank(input$group_field)) {
     args$group <- input$group_field
   }
 
   if (!is_blank(input$column_value)) {
-    if ("y_col" %in% names(formals(get(input$plot_function, mode = "function")))) {
+    if ("y_col" %in% fn_formals) {
       args$y_col <- input$column_value
     }
-    if ("y" %in% names(formals(get(input$plot_function, mode = "function")))) {
+    if ("y" %in% fn_formals) {
       args$y <- input$column_value
     }
   }
@@ -835,9 +1001,18 @@ build_plot <- function(input, data) {
     args$y_line <- input$line_value
   }
 
+  if (!is.null(input$driver_field) && !is_blank(input$driver_field)) {
+    args$driver <- input$driver_field
+  }
+
+  if (!is.null(input$total_field) && !is_blank(input$total_field)) {
+    args$total <- input$total_field
+  }
+
   args$x_freq <- input$x_freq
   args$y_col_label <- input$column_axis_label
   args$y_line_label <- input$line_axis_label
+  args$y_lab <- input$column_axis_label
   args$col_label <- input$column_legend_label
   args$line_label <- input$line_legend_label
   args$col_position <- input$column_position
@@ -870,22 +1045,29 @@ plot_standard_exclusions <- function() {
   c(
     "data",
     "x",
+    "date_var",
     "y",
     "y_col",
     "y_line",
     "group",
+    "driver",
+    "total",
     "x_freq",
     "family",
     "base_size",
+    "fontsize",
     "forecast",
     "forecast_start",
     "forecast_end",
     "palette",
     "palette_fill",
     "palette_line",
+    "fill_palette",
+    "colour_palette",
     "labels",
     "y_col_label",
     "y_line_label",
+    "y_lab",
     "col_label",
     "line_label",
     "col_position",
@@ -1087,6 +1269,55 @@ ui <- fluidPage(
         column(
           8,
           wellPanel(
+            h4("Colours"),
+            fluidRow(
+              column(
+                4,
+                selectInput(
+                  "palette_mode",
+                  "Palette source",
+                  choices = c(
+                    "Automatic sector metadata" = "metadata",
+                    "Saved custom palette" = "saved",
+                    "Create/update custom palette" = "custom"
+                  ),
+                  selected = "metadata"
+                ),
+                uiOutput("saved_palette_selector"),
+                textInput("custom_palette_name", "Custom palette name", value = "")
+              ),
+              column(
+                8,
+                textAreaInput(
+                  "custom_palette_text",
+                  "Custom palette items",
+                  value = "",
+                  rows = 5,
+                  placeholder = "Category A = #1f77b4\nCategory B = #ff7f0e"
+                ),
+                fluidRow(
+                  column(4, actionButton("fill_palette_from_data", "Fill From Data")),
+                  column(4, actionButton("load_saved_palette", "Load Saved")),
+                  column(4, actionButton("save_custom_palette", "Save Palette", class = "btn-success"))
+                ),
+                tags$p(class = "sopi-note", "Use one item per line: category = #hex. Saved palettes are written to metadata/sopi_metadata.xlsx in the custom_palettes sheet.")
+              )
+            ),
+            verbatimTextOutput("palette_status")
+          )
+        ),
+        column(
+          4,
+          wellPanel(
+            h4("Palette preview"),
+            uiOutput("palette_preview")
+          )
+        )
+      ),
+      fluidRow(
+        column(
+          8,
+          wellPanel(
             h4("Preview"),
             actionButton("refresh_preview", "Refresh Preview", class = "btn-primary"),
             tags$p(class = "sopi-note", "Click after changing chart parameters or SVG size to rebuild the visual preview."),
@@ -1127,6 +1358,12 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   output_refresh <- reactiveVal(0)
+  palette_refresh <- reactiveVal(0)
+
+  metadata_resource <- reactive({
+    palette_refresh()
+    load_metadata_resource(project_root)
+  })
 
   output_folder <- reactive({
     build_output_folder(
@@ -1154,6 +1391,134 @@ server <- function(input, output, session) {
   observeEvent(list(input$release_year, input$release_round, input$sector), {
     output_refresh(output_refresh() + 1)
   }, ignoreInit = TRUE)
+
+  output$saved_palette_selector <- renderUI({
+    choices <- palette_choices_from_metadata(metadata_resource())
+
+    if (length(choices) == 0) {
+      return(tags$p(class = "sopi-note", "No saved custom palettes yet. Create one below, then click Save Palette."))
+    }
+
+    selectInput("saved_palette", "Saved custom palette", choices = choices, selected = choices[[1]])
+  })
+
+  current_group_categories <- reactive({
+    data <- tryCatch(loaded_data(), error = function(e) NULL)
+    if (is.null(data) || is_blank(input$group_field) || !input$group_field %in% names(data)) {
+      return(character())
+    }
+
+    categories <- unique(as.character(data[[input$group_field]]))
+    categories[!is.na(categories) & nzchar(categories)]
+  })
+
+  observeEvent(input$fill_palette_from_data, {
+    categories <- current_group_categories()
+    if (length(categories) == 0) {
+      output$palette_status <- renderText("Load data and select a group/category field first.")
+      return()
+    }
+
+    metadata_style <- style_from_metadata(
+      metadata_resource = metadata_resource(),
+      sector = input$sector,
+      categories = categories
+    )
+
+    palette <- complete_palette(categories, metadata_style$palette)
+    updateTextAreaInput(session, "custom_palette_text", value = format_palette_text(palette))
+
+    if (is_blank(input$custom_palette_name)) {
+      updateTextInput(
+        session,
+        "custom_palette_name",
+        value = paste0(safe_config_id(input$sector, "sector"), "_custom")
+      )
+    }
+
+    output$palette_status <- renderText("Filled palette from the current data categories.")
+  })
+
+  observeEvent(input$load_saved_palette, {
+    palette_name <- input$saved_palette
+    palette <- palette_from_custom_metadata(metadata_resource(), palette_name)
+
+    if (is.null(palette) || length(palette) == 0) {
+      output$palette_status <- renderText("No saved palette selected or the selected palette has no colours.")
+      return()
+    }
+
+    updateTextInput(session, "custom_palette_name", value = palette_name)
+    updateTextAreaInput(session, "custom_palette_text", value = format_palette_text(palette))
+    updateSelectInput(session, "palette_mode", selected = "custom")
+    output$palette_status <- renderText(paste("Loaded saved palette:", palette_name))
+  })
+
+  observeEvent(input$save_custom_palette, {
+    result <- tryCatch({
+      palette <- parse_custom_palette_text(input$custom_palette_text)
+      if (length(palette) == 0) {
+        stop("Add at least one palette item before saving.", call. = FALSE)
+      }
+
+      path <- write_custom_palette(
+        project_root = project_root,
+        palette_name = input$custom_palette_name,
+        palette = palette,
+        sector = input$sector,
+        notes = "Created from Shiny app"
+      )
+
+      list(ok = TRUE, path = path, palette_name = trimws(input$custom_palette_name))
+    }, error = function(e) {
+      list(ok = FALSE, message = conditionMessage(e))
+    })
+
+    if (isTRUE(result$ok)) {
+      palette_refresh(palette_refresh() + 1)
+      updateSelectInput(session, "palette_mode", selected = "saved")
+      updateSelectInput(session, "saved_palette", selected = result$palette_name)
+      output$palette_status <- renderText({
+        paste("Saved palette:", result$palette_name, "\nMetadata workbook:", result$path)
+      })
+    } else {
+      output$palette_status <- renderText(paste("Palette save failed:", result$message))
+    }
+  })
+
+  output$palette_preview <- renderUI({
+    palette <- tryCatch({
+      mode <- input$palette_mode %||% "metadata"
+
+      if (identical(mode, "custom")) {
+        parse_custom_palette_text(input$custom_palette_text)
+      } else if (identical(mode, "saved")) {
+        palette_from_custom_metadata(metadata_resource(), input$saved_palette)
+      } else {
+        categories <- current_group_categories()
+        if (length(categories) == 0) {
+          style_from_metadata(metadata_resource(), input$sector)$palette
+        } else {
+          style_from_metadata(metadata_resource(), input$sector, categories = categories)$palette
+        }
+      }
+    }, error = function(e) {
+      NULL
+    })
+
+    if (is.null(palette) || length(palette) == 0) {
+      return(tags$p(class = "sopi-note", "No palette to preview yet."))
+    }
+
+    tags$div(lapply(seq_along(palette), function(i) {
+      tags$div(
+        style = "display:flex; align-items:center; gap:8px; margin-bottom:4px;",
+        tags$span(style = paste0("display:inline-block; width:18px; height:18px; border:1px solid #ccc; background:", unname(palette[[i]]), ";")),
+        tags$span(names(palette)[[i]]),
+        tags$code(unname(palette[[i]]))
+      )
+    }))
+  })
 
   output$resolved_output_folder <- renderText({
     output_folder()
@@ -1310,7 +1675,13 @@ server <- function(input, output, session) {
       selectInput("x_field", "X/date/year field", choices = fields, selected = fields[[1]]),
       selectInput("group_field", "Group/category field", choices = optional_choices(data), selected = if ("group" %in% fields) "group" else ""),
       selectInput("column_value", "Column/bar value", choices = optional_choices(data), selected = first_matching_field(fields, "revenue|value")),
-      selectInput("line_value", "Line value", choices = optional_choices(data), selected = first_matching_field(fields, "volume"))
+      selectInput("line_value", "Line value", choices = optional_choices(data), selected = first_matching_field(fields, "volume")),
+      if ("driver" %in% names(formals(get(input$plot_function, mode = "function")))) {
+        selectInput("driver_field", "Driver field", choices = fields, selected = first_matching_field(fields, "driver"))
+      },
+      if ("total" %in% names(formals(get(input$plot_function, mode = "function")))) {
+        selectInput("total_field", "Total field", choices = fields, selected = first_matching_field(fields, "total"))
+      }
     )
   })
 
@@ -1359,6 +1730,21 @@ server <- function(input, output, session) {
     output_path <- resolved_svg_path()
 
     result <- tryCatch({
+      palette_path <- NULL
+      if (identical(input$palette_mode, "custom")) {
+        palette <- parse_custom_palette_text(input$custom_palette_text)
+        if (length(palette) > 0) {
+          palette_path <- write_custom_palette(
+            project_root = project_root,
+            palette_name = input$custom_palette_name,
+            palette = palette,
+            sector = input$sector,
+            notes = "Created from Shiny app"
+          )
+          palette_refresh(palette_refresh() + 1)
+        }
+      }
+
       plot <- build_plot(input, data)
 
       save_chart_svg(
@@ -1378,7 +1764,7 @@ server <- function(input, output, session) {
         )
       }
 
-      list(ok = TRUE, output_path = output_path, config_path = config_path)
+      list(ok = TRUE, output_path = output_path, config_path = config_path, palette_path = palette_path)
     }, error = function(e) {
       list(ok = FALSE, message = conditionMessage(e), output_path = output_path)
     })
@@ -1386,6 +1772,9 @@ server <- function(input, output, session) {
     if (isTRUE(result$ok)) {
       output$save_status <- renderText({
         lines <- paste("Saved SVG:", result$output_path)
+        if (!is.null(result$palette_path)) {
+          lines <- c(lines, paste("Saved palette metadata:", result$palette_path))
+        }
         if (!is.null(result$config_path)) {
           lines <- c(lines, paste("Updated config:", result$config_path))
         }

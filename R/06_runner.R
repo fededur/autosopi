@@ -94,9 +94,10 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
     args$palette_line <- NULL
   }
 
-  args$palette <- resolve_palette_arg(args$palette, config)
-  args$palette_fill <- resolve_palette_arg(args$palette_fill, config)
-  args$palette_line <- resolve_palette_arg(args$palette_line, config)
+  palette_arg_names <- c("palette", "palette_fill", "palette_line", "fill_palette", "colour_palette")
+  for (arg_name in intersect(palette_arg_names, names(args))) {
+    args[[arg_name]] <- resolve_palette_arg(args[[arg_name]], config, metadata_resource)
+  }
 
   categories <- NULL
   if (!is.null(data) && !is.null(group) && group %in% names(data)) {
@@ -135,7 +136,7 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
   args
 }
 
-resolve_palette_arg <- function(palette, config) {
+resolve_palette_arg <- function(palette, config, metadata_resource = NULL) {
   if (is.null(palette) || length(palette) == 0) return(NULL)
 
   if (is.character(palette) && length(palette) == 1) {
@@ -143,6 +144,9 @@ resolve_palette_arg <- function(palette, config) {
 
     config_palette <- palette_from_config(config, palette)
     if (!is.null(config_palette)) return(config_palette)
+
+    metadata_palette <- palette_from_custom_metadata(metadata_resource, palette)
+    if (!is.null(metadata_palette)) return(metadata_palette)
   }
 
   palette

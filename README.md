@@ -289,6 +289,14 @@ This metadata can provide:
 
 The chart functions should use the metadata colours and labels where possible. If a category does not have a colour in the metadata, the project fills in extra colours so the chart can still be created.
 
+The Shiny app also lets users create or reuse custom palettes while building a chart. Custom palettes are saved in the same workbook, on the `custom_palettes` sheet, using these columns:
+
+```text
+palette | item | hex | sector | notes | updated_at
+```
+
+When a chart uses a saved custom palette, the app writes the palette name into the chart arguments and copies the palette rows into that release's `chart_config.xlsx`. This keeps the release config runnable, while the metadata workbook remains the shared palette library.
+
 ## Adding A New Chart
 
 For normal use, add charts through the config builder.
@@ -351,13 +359,16 @@ Install these once on each user's machine:
 ```r
 install.packages(c(
   "dplyr",
+  "forcats",
   "ggplot2",
+  "lubridate",
   "openxlsx",
   "readxl",
   "rlang",
   "scales",
   "shiny",
   "svglite",
+  "tibble",
   "tidyr"
 ))
 ```

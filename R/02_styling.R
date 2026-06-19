@@ -247,6 +247,117 @@ palette_from_config <- function(config, palette_name) {
   stats::setNames(rows$hex, rows$item)
 }
 
+custom_palette_columns <- function() {
+  c("palette", "item", "hex", "sector", "notes", "updated_at")
+}
+
+normalise_custom_palette_table <- function(data) {
+  columns <- custom_palette_columns()
+
+  if (is.null(data) || nrow(data) == 0) {
+    return(stats::setNames(
+      as.data.frame(rep(list(character()), length(columns)), stringsAsFactors = FALSE),
+      columns
+    ))
+  }
+
+  data <- clean_metadata_names(as.data.frame(data, stringsAsFactors = FALSE))
+
+  for (column in setdiff(columns, names(data))) {
+    data[[column]] <- NA_character_
+  }
+
+  data <- data[, columns, drop = FALSE]
+  data[] <- lapply(data, as.character)
+  data
+}
+
+read_custom_palettes <- function(project_root, metadata_file = "sopi_metadata.xlsx", sheet = "custom_palettes") {
+  path <- metadata_path(project_root, metadata_file)
+
+  if (!file.exists(path) || !sheet %in% readxl::excel_sheets(path)) {
+    return(normalise_custom_palette_table(NULL))
+  }
+
+  readxl::read_xlsx(path, sheet = sheet) |>
+    normalise_custom_palette_table()
+}
+
+palette_from_custom_metadata <- function(metadata_resource, palette_name) {
+  if (is.null(palette_name) || is.na(palette_name) || !nzchar(trimws(palette_name))) {
+    return(NULL)
+  }
+
+  if (is.null(metadata_resource) || is.null(metadata_resource$custom_palettes)) {
+    return(NULL)
+  }
+
+  rows <- metadata_resource$custom_palettes |>
+    dplyr::filter(.data$palette == palette_name) |>
+    dplyr::filter(!is.na(.data$item), nzchar(.data$item), !is.na(.data$hex), nzchar(.data$hex))
+
+  if (nrow(rows) == 0) return(NULL)
+
+  pal <- stats::setNames(rows$hex, rows$item)
+  pal[!duplicated(names(pal))]
+}
+
+write_custom_palette <- function(
+    project_root,
+    palette_name,
+    palette,
+    sector = NA_character_,
+    notes = NA_character_,
+    metadata_file = "sopi_metadata.xlsx",
+    sheet = "custom_palettes") {
+  if (is.null(palette_name) || !nzchar(trimws(palette_name))) {
+    stop("Palette name is required.", call. = FALSE)
+  }
+
+  if (is.null(palette) || length(palette) == 0) {
+    stop("At least one palette colour is required.", call. = FALSE)
+  }
+
+  if (is.null(names(palette)) || any(is.na(names(palette))) || any(!nzchar(names(palette)))) {
+    stop("Every palette colour needs an item/category name.", call. = FALSE)
+  }
+
+  path <- metadata_path(project_root, metadata_file)
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+
+  existing <- read_custom_palettes(project_root, metadata_file = metadata_file, sheet = sheet)
+  palette_name <- trimws(palette_name)
+
+  existing <- existing[is.na(existing$palette) | existing$palette != palette_name, , drop = FALSE]
+  new_rows <- data.frame(
+    palette = palette_name,
+    item = names(palette),
+    hex = unname(palette),
+    sector = sector,
+    notes = notes,
+    updated_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+    stringsAsFactors = FALSE
+  )
+
+  custom_palettes <- dplyr::bind_rows(existing, new_rows)
+
+  if (file.exists(path)) {
+    wb <- openxlsx::loadWorkbook(path)
+  } else {
+    wb <- openxlsx::createWorkbook()
+  }
+
+  if (sheet %in% names(wb)) {
+    openxlsx::removeWorksheet(wb, sheet)
+  }
+
+  openxlsx::addWorksheet(wb, sheet)
+  openxlsx::writeData(wb, sheet, custom_palettes, withFilter = TRUE)
+  openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
+
+  invisible(path)
+}
+
 metadata_path <- function(project_root, filename = "sopi_metadata.xlsx") {
   file.path(project_root, "metadata", filename)
 }
@@ -268,6 +379,12 @@ load_metadata_resource <- function(project_root, metadata_file = "sopi_metadata.
         clean_metadata_names()
     } else {
       NULL
+    },
+    custom_palettes = if ("custom_palettes" %in% sheets) {
+      readxl::read_xlsx(path, sheet = "custom_palettes") |>
+        normalise_custom_palette_table()
+    } else {
+      normalise_custom_palette_table(NULL)
     }
   )
 }
