@@ -299,7 +299,8 @@ chart_arg_registry <- function() {
   list(
     list(section = "fields", args = c("x", "date_var"), id = "x_field", type = "field", label = "X/date/year field", optional = FALSE, match = ""),
     list(section = "fields", args = "group", id = "group_field", type = "field", label = "Group/category field", optional = TRUE, match = "group"),
-    list(section = "fields", args = c("y_col", "y"), id = "column_value", type = "field", label = "Y value", optional = TRUE, match = "revenue|value"),
+    list(section = "fields", args = "y_col", id = "column_value", type = "field", label = "Column/bar value", optional = TRUE, match = "revenue|value"),
+    list(section = "fields", args = "y", id = "column_value", type = "field", label = "Y value", optional = FALSE, match = "revenue|value"),
     list(section = "fields", args = "y_line", id = "line_value", type = "field", label = "Line value", optional = TRUE, match = "volume"),
     list(section = "fields", args = "driver", id = "driver_field", type = "field", label = "Driver field", optional = FALSE, match = "driver"),
     list(section = "fields", args = "total", id = "total_field", type = "field", label = "Total field", optional = FALSE, match = "total"),
@@ -326,6 +327,7 @@ chart_registry_entries <- function(function_name, section = NULL) {
 
   fn_args <- names(formals(get(function_name, mode = "function")))
   entries <- Filter(function(entry) any(entry$args %in% fn_args), chart_arg_registry())
+  entries <- entries[!duplicated(vapply(entries, function(entry) entry$id, character(1)))]
 
   if (!is.null(section)) {
     entries <- Filter(function(entry) identical(entry$section, section), entries)
@@ -354,7 +356,9 @@ render_chart_registry_entry <- function(entry, function_name, data = NULL) {
   if (identical(entry$type, "field")) {
     fields <- field_choices(data)
     choices <- if (isTRUE(entry$optional)) optional_choices(data) else fields
-    selected <- if (!is.null(entry$match) && nzchar(entry$match)) {
+    selected <- if (isTRUE(entry$optional)) {
+      ""
+    } else if (!is.null(entry$match) && nzchar(entry$match)) {
       first_matching_field(fields, entry$match)
     } else if (length(fields) > 0) {
       fields[[1]]
