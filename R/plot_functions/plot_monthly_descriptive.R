@@ -1,3 +1,74 @@
+sopi_monthly_descriptive_legend_keys <- function(
+    data,
+    date_var = "date",
+    y = "value",
+    month_year = NULL) {
+  y_name <- if (is.character(y)) y else rlang::as_name(rlang::enquo(y))
+
+  data <- data %>%
+    dplyr::mutate(
+      date = parse_flexible_date(.data[[date_var]]),
+      month = lubridate::month(.data$date),
+      month_lab = lubridate::month(.data$date, abbr = TRUE, label = TRUE),
+      month_lab = sub("Sept", "Sep", .data$month_lab),
+      year = lubridate::year(.data$date)
+    ) %>%
+    dplyr::mutate(
+      season_end_year = ifelse(.data$month >= 7, .data$year + 1, .data$year),
+      season = paste0(
+        .data$season_end_year - 1,
+        "/",
+        substr(.data$season_end_year, 3, 4)
+      )
+    ) %>%
+    dplyr::group_by(.data$season, .data$season_end_year, .data$month_lab) %>%
+    dplyr::summarise(
+      value = sum(.data[[y_name]], na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::group_by(.data$season) %>%
+    dplyr::mutate(n_months = dplyr::n()) %>%
+    dplyr::ungroup()
+
+  if (!is.null(month_year)) {
+    parsed_date <- lubridate::parse_date_time(month_year, orders = "b Y")
+    input_month <- lubridate::month(parsed_date)
+    input_year <- lubridate::year(parsed_date)
+
+    fy_end_year <- ifelse(input_month >= 7, input_year + 1, input_year)
+
+    data <- data %>%
+      dplyr::filter(.data$season_end_year <= fy_end_year)
+  }
+
+  current_end <- max(data$season_end_year, na.rm = TRUE)
+  five_years <- (current_end - 5):(current_end - 1)
+  two_years <- (current_end - 1):current_end
+
+  complete_seasons <- data %>%
+    dplyr::filter(.data$n_months == 12, .data$season_end_year %in% five_years)
+
+  seasons_label <- paste0(
+    min(five_years) - 1,
+    "/",
+    substr(min(five_years), 3, 4),
+    "-",
+    substr(max(five_years), 3, 4)
+  )
+
+  average_label <- paste0(seasons_label, " average")
+  range_label <- paste0(seasons_label, " range")
+
+  two_seasons <- data %>%
+    dplyr::filter(.data$season_end_year %in% two_years)
+
+  unique(c(
+    average_label,
+    range_label,
+    two_seasons$season
+  ))
+}
+
 plot_monthly_descriptive <- function(
     data,
     date_var = "date",
@@ -15,12 +86,12 @@ plot_monthly_descriptive <- function(
   
   y_quo <- rlang::enquo(y)
   
-  if (rlang::quo_is_missing(y_quo)) {
+  if (rlang::quo_is_missing(y_quo) && !is.character(y)) {
     stop("`y` must be supplied.")
   }
   
   # Convert to column name
-  y_name <- rlang::as_name(y_quo)
+  y_name <- if (is.character(y)) y else rlang::as_name(y_quo)
 
   # -------------------------
   # MONTHS
@@ -35,7 +106,7 @@ plot_monthly_descriptive <- function(
   # -------------------------
   data <- data %>%
     mutate(
-      date = lubridate::date(date),
+      date = parse_flexible_date(.data[[date_var]]),
       month = lubridate::month(date),
       month_lab = lubridate::month(date, abbr = TRUE, label = TRUE),
       month_lab = sub("Sept", "Sep", month_lab),
@@ -71,7 +142,7 @@ plot_monthly_descriptive <- function(
   }
   
   # Pull values for calculations
-  y_vals <- dplyr::pull(data, !!y_quo)
+  y_vals <- dplyr::pull(data, .data[[y_name]])
   
   # -------------------------
   # OPTIONAL FILTER
@@ -177,6 +248,15 @@ plot_monthly_descriptive <- function(
       scales::hue_pal()(length(legend_keys)),
       legend_keys
     )
+  } else if (!is.null(names(colour_palette)) && any(nzchar(names(colour_palette)))) {
+    default_palette <- stats::setNames(
+      c("#3D3D3D", "#dbdcde", scales::hue_pal()(max(length(legend_keys) - 2, 0))),
+      legend_keys
+    )
+    named_palette <- colour_palette[!is.na(names(colour_palette)) & nzchar(names(colour_palette))]
+    matched_names <- intersect(names(named_palette), legend_keys)
+    default_palette[matched_names] <- named_palette[matched_names]
+    palette <- default_palette
   } else {
     
     n_pal <- length(legend_keys) - 2

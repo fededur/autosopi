@@ -193,6 +193,39 @@ format_palette_text <- function(palette) {
   paste(paste(names(palette), unname(palette), sep = " = "), collapse = "\n")
 }
 
+monthly_descriptive_palette <- function(
+    categories,
+    metadata_resource,
+    sector,
+    average_colour = "#3D3D3D",
+    range_colour = "#dbdcde") {
+  if (length(categories) == 0) return(character())
+
+  season_categories <- categories[-seq_len(min(2, length(categories)))]
+  sector_style <- style_from_metadata(
+    metadata_resource = metadata_resource,
+    sector = sector
+  )
+
+  sector_colours <- unname(sector_style$palette)
+  sector_colours <- sector_colours[!is.na(sector_colours) & nzchar(sector_colours)]
+
+  if (length(sector_colours) < length(season_categories)) {
+    sector_colours <- c(
+      sector_colours,
+      scales::hue_pal()(length(season_categories) - length(sector_colours))
+    )
+  }
+
+  palette <- c(
+    average_colour,
+    range_colour,
+    sector_colours[seq_along(season_categories)]
+  )
+
+  stats::setNames(palette[seq_along(categories)], categories)
+}
+
 palette_choices_from_metadata <- function(metadata_resource) {
   if (is.null(metadata_resource) || is.null(metadata_resource$custom_palettes)) {
     return(character())
@@ -214,6 +247,19 @@ selected_palette_name <- function(input) {
   }
 
   if (is.null(name) || !nzchar(trimws(name))) NULL else trimws(name)
+}
+
+effective_palette_name <- function(input, plot_id = NULL) {
+  palette_name <- selected_palette_name(input)
+  if (!is.null(palette_name)) {
+    return(palette_name)
+  }
+
+  if (identical(input$plot_function, "plot_monthly_descriptive") && !is.null(plot_id)) {
+    return(paste0(plot_id, "_palette"))
+  }
+
+  NULL
 }
 
 custom_palette_for_preview <- function(input, data = NULL) {
@@ -247,6 +293,131 @@ add_palette_args_for_function <- function(args, palette, function_name) {
 
 safe_input_id <- function(prefix, arg_name) {
   paste(prefix, gsub("[^A-Za-z0-9_]+", "_", arg_name), sep = "__")
+}
+
+chart_arg_registry <- function() {
+  list(
+    list(section = "fields", args = c("x", "date_var"), id = "x_field", type = "field", label = "X/date/year field", optional = FALSE, match = ""),
+    list(section = "fields", args = "group", id = "group_field", type = "field", label = "Group/category field", optional = TRUE, match = "group"),
+    list(section = "fields", args = c("y_col", "y"), id = "column_value", type = "field", label = "Y value", optional = TRUE, match = "revenue|value"),
+    list(section = "fields", args = "y_line", id = "line_value", type = "field", label = "Line value", optional = TRUE, match = "volume"),
+    list(section = "fields", args = "driver", id = "driver_field", type = "field", label = "Driver field", optional = FALSE, match = "driver"),
+    list(section = "fields", args = "total", id = "total_field", type = "field", label = "Total field", optional = FALSE, match = "total"),
+    list(section = "options", args = "forecast", id = "forecast", type = "checkbox", label = "Show forecast shading", default = TRUE),
+    list(section = "options", args = "forecast_start", id = "forecast_start_year", type = "numeric", label = "Forecast start year", default = 2026, min = 1990),
+    list(section = "options", args = "forecast_end", id = "forecast_end_year", type = "numeric", label = "Forecast end year", default = 2030, min = 1990),
+    list(section = "options", args = "x_freq", id = "x_freq", type = "select", label = "X frequency", default = "auto", choices = c("auto", "yearly", "quarterly", "monthly")),
+    list(section = "options", args = "col_position", id = "column_position", type = "select", label = "Column position", default = "stacked", choices = c("stacked", "dodge")),
+    list(section = "labels", args = c("y_label", "y_lab", "y_col_label"), id = "column_axis_label", type = "text", label = "Y-axis label", default = "Value"),
+    list(section = "labels", args = "col_label", id = "column_legend_label", type = "text", label = "Column legend label", default = "Revenue"),
+    list(section = "labels", args = "y_line_label", id = "line_axis_label", type = "text", label = "Line axis label", default = "Export volume (tonnes)"),
+    list(section = "labels", args = "line_label", id = "line_legend_label", type = "text", label = "Line legend label", default = "Volume"),
+    list(section = "advanced", args = "primary_min_breaks", id = "primary_min_breaks", type = "numeric", label = "Primary min breaks", default = 4, min = 2),
+    list(section = "advanced", args = "primary_max_breaks", id = "primary_max_breaks", type = "numeric", label = "Primary max breaks", default = 6, min = 2),
+    list(section = "advanced", args = "secondary_min_breaks", id = "secondary_min_breaks", type = "numeric", label = "Secondary min breaks", default = 4, min = 2),
+    list(section = "advanced", args = "secondary_max_breaks", id = "secondary_max_breaks", type = "numeric", label = "Secondary max breaks", default = 6, min = 2),
+    list(section = "advanced", args = "y_min_breaks", id = "y_min_breaks", type = "numeric", label = "Y min breaks", default = 4, min = 2),
+    list(section = "advanced", args = "y_max_breaks", id = "y_max_breaks", type = "numeric", label = "Y max breaks", default = 5, min = 2)
+  )
+}
+
+chart_registry_entries <- function(function_name, section = NULL) {
+  if (!exists(function_name, mode = "function")) return(list())
+
+  fn_args <- names(formals(get(function_name, mode = "function")))
+  entries <- Filter(function(entry) any(entry$args %in% fn_args), chart_arg_registry())
+
+  if (!is.null(section)) {
+    entries <- Filter(function(entry) identical(entry$section, section), entries)
+  }
+
+  entries
+}
+
+chart_entry_label <- function(entry, function_name) {
+  fn_args <- names(formals(get(function_name, mode = "function")))
+
+  if (identical(entry$id, "column_value") && "y_col" %in% fn_args) {
+    return("Column/bar value")
+  }
+
+  if (identical(entry$id, "column_axis_label") && "y_col_label" %in% fn_args) {
+    return("Column axis label")
+  }
+
+  entry$label
+}
+
+render_chart_registry_entry <- function(entry, function_name, data = NULL) {
+  label <- chart_entry_label(entry, function_name)
+
+  if (identical(entry$type, "field")) {
+    fields <- field_choices(data)
+    choices <- if (isTRUE(entry$optional)) optional_choices(data) else fields
+    selected <- if (!is.null(entry$match) && nzchar(entry$match)) {
+      first_matching_field(fields, entry$match)
+    } else if (length(fields) > 0) {
+      fields[[1]]
+    } else {
+      ""
+    }
+
+    if (!isTRUE(entry$optional) && is_blank(selected) && length(fields) > 0) {
+      selected <- fields[[1]]
+    }
+
+    return(selectInput(entry$id, label, choices = choices, selected = selected))
+  }
+
+  if (identical(entry$type, "select")) {
+    return(selectInput(entry$id, label, choices = entry$choices, selected = entry$default))
+  }
+
+  if (identical(entry$type, "checkbox")) {
+    return(checkboxInput(entry$id, label, value = isTRUE(entry$default)))
+  }
+
+  if (identical(entry$type, "numeric")) {
+    return(numericInput(entry$id, label, value = entry$default, min = entry$min %||% NA))
+  }
+
+  textInput(entry$id, label, value = entry$default %||% "")
+}
+
+render_chart_registry_section <- function(function_name, section, data = NULL, empty_message = NULL) {
+  entries <- chart_registry_entries(function_name, section)
+
+  if (length(entries) == 0) {
+    return(tags$p(class = "sopi-note", empty_message %||% "No controls are needed for this plot function."))
+  }
+
+  do.call(tagList, lapply(entries, render_chart_registry_entry, function_name = function_name, data = data))
+}
+
+collect_chart_registry_args <- function(input, function_name) {
+  if (!exists(function_name, mode = "function")) return(list())
+
+  fn_args <- names(formals(get(function_name, mode = "function")))
+  args <- list()
+
+  for (entry in chart_registry_entries(function_name)) {
+    value <- input[[entry$id]]
+    if (is.null(value)) next
+
+    if (identical(entry$type, "field") && isTRUE(entry$optional) && is_blank(value)) {
+      next
+    }
+
+    if (identical(entry$type, "text") && is_blank(value)) {
+      next
+    }
+
+    for (arg_name in intersect(entry$args, fn_args)) {
+      args[[arg_name]] <- value
+    }
+  }
+
+  args
 }
 
 function_extra_args <- function(function_name, exclude) {
@@ -772,64 +943,52 @@ build_plot_args_config <- function(input, plot_id) {
     collect_function_arguments(input, input$plot_function, "plot_arg", plot_standard_exclusions()),
     parse_extra_args(input$plot_extra_args)
   )
+  fn_formals <- names(formals(get(input$plot_function, mode = "function")))
 
-  palette_name <- selected_palette_name(input)
+  palette_name <- effective_palette_name(input, plot_id)
   if (!is.null(palette_name)) {
     args <- add_palette_args_for_function(args, palette_name, input$plot_function)
   } else {
     args$use_metadata_palette <- TRUE
   }
 
-  args$x <- input$x_field
-  args$date_var <- input$x_field
-
-  if (!is_blank(input$group_field)) {
-    args$group <- input$group_field
-  }
-
-  if (!is_blank(input$column_value)) {
-    args$y_col <- input$column_value
-    args$y <- input$column_value
-  }
-
-  if (!is_blank(input$line_value)) {
-    args$y_line <- input$line_value
-  }
-
-  if (!is.null(input$driver_field) && !is_blank(input$driver_field)) {
-    args$driver <- input$driver_field
-  }
-
-  if (!is.null(input$total_field) && !is_blank(input$total_field)) {
-    args$total <- input$total_field
-  }
-
-  args$x_freq <- input$x_freq
-  args$y_col_label <- input$column_axis_label
-  args$y_line_label <- input$line_axis_label
-  args$y_lab <- input$column_axis_label
-  args$col_label <- input$column_legend_label
-  args$line_label <- input$line_legend_label
-  args$col_position <- input$column_position
-  args$forecast <- isTRUE(input$forecast)
-  args$primary_min_breaks <- input$primary_min_breaks
-  args$primary_max_breaks <- input$primary_max_breaks
-  args$secondary_min_breaks <- input$secondary_min_breaks
-  args$secondary_max_breaks <- input$secondary_max_breaks
+  args <- merge_args(args, collect_chart_registry_args(input, input$plot_function))
   args$width <- input$width
   args$height <- input$height
+
+  args <- args[names(args) %in% c(fn_formals, "width", "height", "use_metadata_palette")]
 
   args_to_config_rows("plot_id", plot_id, args, "Created from Shiny app")
 }
 
-build_selected_palette_rows <- function(input, metadata_resource) {
-  palette_name <- selected_palette_name(input)
+build_selected_palette_rows <- function(input, metadata_resource, plot_id = NULL, data = NULL) {
+  palette_name <- effective_palette_name(input, plot_id)
   if (is.null(palette_name)) {
     return(empty_config_table(c("palette", "item", "hex", "notes")))
   }
 
   if (identical(input$palette_mode, "custom")) {
     palette <- parse_custom_palette_text(input$custom_palette_text)
+  } else if (
+    identical(input$plot_function, "plot_monthly_descriptive") &&
+      is.null(selected_palette_name(input)) &&
+      !is.null(data) &&
+      !is_blank(input$x_field)
+  ) {
+    y_field <- if (is_blank(input$column_value)) "value" else input$column_value
+    month_year <- input[[safe_input_id("plot_arg", "month_year")]]
+    month_year <- if (is.null(month_year) || is_blank(month_year)) NULL else month_year
+    categories <- sopi_monthly_descriptive_legend_keys(
+      data = data,
+      date_var = input$x_field,
+      y = y_field,
+      month_year = month_year
+    )
+    palette <- monthly_descriptive_palette(
+      categories = categories,
+      metadata_resource = metadata_resource,
+      sector = input$sector
+    )
   } else {
     palette <- palette_from_custom_metadata(metadata_resource, palette_name)
   }
@@ -847,7 +1006,7 @@ build_selected_palette_rows <- function(input, metadata_resource) {
   )
 }
 
-write_release_config_from_app <- function(input, project_root, plot_id, data_source_id) {
+write_release_config_from_app <- function(input, project_root, plot_id, data_source_id, data = NULL) {
   config_path <- release_config_path(project_root, input$release_year, input$release_round)
   dir.create(dirname(config_path), recursive = TRUE, showWarnings = FALSE)
 
@@ -897,7 +1056,12 @@ write_release_config_from_app <- function(input, project_root, plot_id, data_sou
     "plot_id",
     plot_id
   )
-  selected_palette_rows <- build_selected_palette_rows(input, load_metadata_resource(project_root))
+  selected_palette_rows <- build_selected_palette_rows(
+    input,
+    load_metadata_resource(project_root),
+    plot_id = plot_id,
+    data = data
+  )
   if (nrow(selected_palette_rows) > 0) {
     tables$palettes <- upsert_rows(
       tables$palettes,
@@ -970,55 +1134,34 @@ build_plot <- function(input, data) {
     collect_function_arguments(input, input$plot_function, "plot_arg", plot_standard_exclusions()),
     parse_extra_args(input$plot_extra_args)
   )
-  fn_formals <- names(formals(get(input$plot_function, mode = "function")))
   preview_palette <- custom_palette_for_preview(input, data)
 
   if (!is.null(preview_palette)) {
     args <- add_palette_args_for_function(args, preview_palette, input$plot_function)
+  } else if (identical(input$plot_function, "plot_monthly_descriptive") && !is_blank(input$x_field)) {
+    y_field <- if (is_blank(input$column_value)) "value" else input$column_value
+    month_year <- input[[safe_input_id("plot_arg", "month_year")]]
+    month_year <- if (is.null(month_year) || is_blank(month_year)) NULL else month_year
+    categories <- sopi_monthly_descriptive_legend_keys(
+      data = data,
+      date_var = input$x_field,
+      y = y_field,
+      month_year = month_year
+    )
+    args <- add_palette_args_for_function(
+      args,
+      monthly_descriptive_palette(
+        categories = categories,
+        metadata_resource = load_metadata_resource(project_root),
+        sector = input$sector
+      ),
+      input$plot_function
+    )
   } else {
     args$use_metadata_palette <- TRUE
   }
 
-  args$x <- input$x_field
-  args$date_var <- input$x_field
-
-  if (!is_blank(input$group_field)) {
-    args$group <- input$group_field
-  }
-
-  if (!is_blank(input$column_value)) {
-    if ("y_col" %in% fn_formals) {
-      args$y_col <- input$column_value
-    }
-    if ("y" %in% fn_formals) {
-      args$y <- input$column_value
-    }
-  }
-
-  if (!is_blank(input$line_value)) {
-    args$y_line <- input$line_value
-  }
-
-  if (!is.null(input$driver_field) && !is_blank(input$driver_field)) {
-    args$driver <- input$driver_field
-  }
-
-  if (!is.null(input$total_field) && !is_blank(input$total_field)) {
-    args$total <- input$total_field
-  }
-
-  args$x_freq <- input$x_freq
-  args$y_col_label <- input$column_axis_label
-  args$y_line_label <- input$line_axis_label
-  args$y_lab <- input$column_axis_label
-  args$col_label <- input$column_legend_label
-  args$line_label <- input$line_legend_label
-  args$col_position <- input$column_position
-  args$forecast <- isTRUE(input$forecast)
-  args$primary_min_breaks <- input$primary_min_breaks
-  args$primary_max_breaks <- input$primary_max_breaks
-  args$secondary_min_breaks <- input$secondary_min_breaks
-  args$secondary_max_breaks <- input$secondary_max_breaks
+  args <- merge_args(args, collect_chart_registry_args(input, input$plot_function))
 
   plot_args <- clean_plot_args(
     args = args,
@@ -1197,40 +1340,21 @@ ui <- fluidPage(
             selectInput("plot_function", "Plot function", choices = plot_function_names),
             uiOutput("field_selectors"),
             uiOutput("plot_function_args"),
-            h4("Forecast"),
-            checkboxInput("forecast", "Show forecast shading", value = TRUE),
-            fluidRow(
-              column(6, numericInput("forecast_start_year", "Forecast start year", value = 2026, min = 1990)),
-              column(6, numericInput("forecast_end_year", "Forecast end year", value = 2030, min = 1990))
-            ),
-            fluidRow(
-              column(6, selectInput("x_freq", "X frequency", choices = c("auto", "yearly", "quarterly", "monthly"), selected = "auto")),
-              column(6, selectInput("column_position", "Column position", choices = c("stacked", "dodge"), selected = "stacked"))
-            )
+            uiOutput("chart_option_controls")
           )
         ),
         column(
           4,
           wellPanel(
             h4("Labels"),
-            textInput("column_axis_label", "Column axis label", value = "Export revenue (NZ$ million)"),
-            textInput("column_legend_label", "Column legend label", value = "Revenue"),
-            textInput("line_axis_label", "Line axis label", value = "Export volume (tonnes)"),
-            textInput("line_legend_label", "Line legend label", value = "Volume")
+            uiOutput("chart_label_controls")
           )
         ),
         column(
           4,
           wellPanel(
             h4("Advanced"),
-            fluidRow(
-              column(6, numericInput("primary_min_breaks", "Primary min breaks", value = 4, min = 2)),
-              column(6, numericInput("primary_max_breaks", "Primary max breaks", value = 6, min = 2))
-            ),
-            fluidRow(
-              column(6, numericInput("secondary_min_breaks", "Secondary min breaks", value = 4, min = 2)),
-              column(6, numericInput("secondary_max_breaks", "Secondary max breaks", value = 6, min = 2))
-            ),
+            uiOutput("chart_advanced_controls"),
             textAreaInput("plot_extra_args", "Extra plot arguments", rows = 3)
           )
         )
@@ -1372,9 +1496,30 @@ server <- function(input, output, session) {
     selectInput("saved_palette", "Saved custom palette", choices = choices, selected = choices[[1]])
   })
 
-  current_group_categories <- reactive({
+  current_palette_categories <- reactive({
     data <- tryCatch(loaded_data(), error = function(e) NULL)
-    if (is.null(data) || is_blank(input$group_field) || !input$group_field %in% names(data)) {
+    if (is.null(data)) {
+      return(character())
+    }
+
+    if (
+      identical(input$plot_function, "plot_monthly_descriptive") &&
+        exists("sopi_monthly_descriptive_legend_keys", mode = "function") &&
+        !is_blank(input$x_field)
+    ) {
+      y_field <- if (is_blank(input$column_value)) "value" else input$column_value
+      month_year <- input[[safe_input_id("plot_arg", "month_year")]]
+      month_year <- if (is.null(month_year) || is_blank(month_year)) NULL else month_year
+
+      return(sopi_monthly_descriptive_legend_keys(
+        data = data,
+        date_var = input$x_field,
+        y = y_field,
+        month_year = month_year
+      ))
+    }
+
+    if (is_blank(input$group_field) || !input$group_field %in% names(data)) {
       return(character())
     }
 
@@ -1383,19 +1528,27 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$fill_palette_from_data, {
-    categories <- current_group_categories()
+    categories <- current_palette_categories()
     if (length(categories) == 0) {
-      output$palette_status <- renderText("Load data and select a group/category field first.")
+      output$palette_status <- renderText("Load data and select the chart fields first.")
       return()
     }
 
-    metadata_style <- style_from_metadata(
-      metadata_resource = metadata_resource(),
-      sector = input$sector,
-      categories = categories
-    )
+    if (identical(input$plot_function, "plot_monthly_descriptive")) {
+      palette <- monthly_descriptive_palette(
+        categories = categories,
+        metadata_resource = metadata_resource(),
+        sector = input$sector
+      )
+    } else {
+      metadata_style <- style_from_metadata(
+        metadata_resource = metadata_resource(),
+        sector = input$sector,
+        categories = categories
+      )
 
-    palette <- complete_palette(categories, metadata_style$palette)
+      palette <- complete_palette(categories, metadata_style$palette)
+    }
     updateTextAreaInput(session, "custom_palette_text", value = format_palette_text(palette))
 
     if (is_blank(input$custom_palette_name)) {
@@ -1406,7 +1559,7 @@ server <- function(input, output, session) {
       )
     }
 
-    output$palette_status <- renderText("Filled palette from the current data categories.")
+    output$palette_status <- renderText("Filled palette from the current chart categories.")
   })
 
   observeEvent(input$load_saved_palette, {
@@ -1465,9 +1618,15 @@ server <- function(input, output, session) {
       } else if (identical(mode, "saved")) {
         palette_from_custom_metadata(metadata_resource(), input$saved_palette)
       } else {
-        categories <- current_group_categories()
+        categories <- current_palette_categories()
         if (length(categories) == 0) {
           style_from_metadata(metadata_resource(), input$sector)$palette
+        } else if (identical(input$plot_function, "plot_monthly_descriptive")) {
+          monthly_descriptive_palette(
+            categories = categories,
+            metadata_resource = metadata_resource(),
+            sector = input$sector
+          )
         } else {
           style_from_metadata(metadata_resource(), input$sector, categories = categories)$palette
         }
@@ -1641,17 +1800,12 @@ server <- function(input, output, session) {
       return(tags$p(class = "sopi-note", "Load data first to choose fields."))
     }
 
-    tagList(
-      selectInput("x_field", "X/date/year field", choices = fields, selected = fields[[1]]),
-      selectInput("group_field", "Group/category field", choices = optional_choices(data), selected = if ("group" %in% fields) "group" else ""),
-      selectInput("column_value", "Column/bar value", choices = optional_choices(data), selected = first_matching_field(fields, "revenue|value")),
-      selectInput("line_value", "Line value", choices = optional_choices(data), selected = first_matching_field(fields, "volume")),
-      if ("driver" %in% names(formals(get(input$plot_function, mode = "function")))) {
-        selectInput("driver_field", "Driver field", choices = fields, selected = first_matching_field(fields, "driver"))
-      },
-      if ("total" %in% names(formals(get(input$plot_function, mode = "function")))) {
-        selectInput("total_field", "Total field", choices = fields, selected = first_matching_field(fields, "total"))
-      }
+    req(input$plot_function)
+    render_chart_registry_section(
+      function_name = input$plot_function,
+      section = "fields",
+      data = data,
+      empty_message = "This plot function does not need field selectors."
     )
   })
 
@@ -1660,6 +1814,33 @@ server <- function(input, output, session) {
     tagList(
       tags$h4("Function arguments"),
       function_argument_inputs(input$plot_function, "plot_arg", plot_standard_exclusions())
+    )
+  })
+
+  output$chart_option_controls <- renderUI({
+    req(input$plot_function)
+    render_chart_registry_section(
+      function_name = input$plot_function,
+      section = "options",
+      empty_message = "No chart option controls are needed for this plot function."
+    )
+  })
+
+  output$chart_label_controls <- renderUI({
+    req(input$plot_function)
+    render_chart_registry_section(
+      function_name = input$plot_function,
+      section = "labels",
+      empty_message = "No label controls are needed for this plot function."
+    )
+  })
+
+  output$chart_advanced_controls <- renderUI({
+    req(input$plot_function)
+    render_chart_registry_section(
+      function_name = input$plot_function,
+      section = "advanced",
+      empty_message = "No advanced controls are needed for this plot function."
     )
   })
 
@@ -1730,7 +1911,8 @@ server <- function(input, output, session) {
           input = input,
           project_root = project_root,
           plot_id = plot_id,
-          data_source_id = data_source_id
+          data_source_id = data_source_id,
+          data = data
         )
       }
 
