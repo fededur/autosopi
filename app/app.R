@@ -318,7 +318,10 @@ chart_arg_registry <- function() {
     list(section = "advanced", args = "secondary_min_breaks", id = "secondary_min_breaks", type = "numeric", label = "Secondary min breaks", default = 4, min = 2),
     list(section = "advanced", args = "secondary_max_breaks", id = "secondary_max_breaks", type = "numeric", label = "Secondary max breaks", default = 6, min = 2),
     list(section = "advanced", args = "y_min_breaks", id = "y_min_breaks", type = "numeric", label = "Y min breaks", default = 4, min = 2),
-    list(section = "advanced", args = "y_max_breaks", id = "y_max_breaks", type = "numeric", label = "Y max breaks", default = 5, min = 2)
+    list(section = "advanced", args = "y_max_breaks", id = "y_max_breaks", type = "numeric", label = "Y max breaks", default = 5, min = 2),
+    list(section = "advanced", args = "legend_order", id = "legend_order", type = "text", label = "Legend order", default = ""),
+    list(section = "advanced", args = "col_order", id = "col_order", type = "text", label = "Column order", default = ""),
+    list(section = "advanced", args = "line_order", id = "line_order", type = "text", label = "Line order", default = "")
   )
 }
 

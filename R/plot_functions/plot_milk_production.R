@@ -1,7 +1,9 @@
 plot_milk_production <- function(
     data,
     filter_year_month = NULL,
-    y_lab = 'Milksolids production (million kgMS)'
+    y_lab = 'Milksolids production (million kgMS)',
+    family = "DIN",
+    base_size = 10.5
 ) {
   
   milk_prod_data <- data
@@ -175,7 +177,8 @@ plot_milk_production <- function(
     labs(x = NULL, y = y_lab, fill = NULL) +
     
     theme_sopi(
-      family = "DIN",
+      family = family,
+      base_size = base_size,
       axis.title.y = element_text(margin = margin(r = 8)),
       axis.text.y = element_text(margin = margin(r = 6)),
       axis.text.x = element_text(margin = margin(t = 4))

@@ -32,8 +32,12 @@ plot_generic_ts <- function(
     forecast_label_pos = 0.9,
     col_position = c("stacked", "dodge"),
     family = "DIN",
+    base_size = 10.5,
     sort_col = c("none", "asc", "desc"),
-    sort_line = c("none", "asc", "desc")
+    sort_line = c("none", "asc", "desc"),
+    legend_order = NULL,
+    col_order = NULL,
+    line_order = NULL
 ) {
   
   sort_col  <- match.arg(sort_col)
@@ -211,9 +215,34 @@ plot_generic_ts <- function(
   # =========================
   # SORTING
   # =========================
+
+  parse_order <- function(order) {
+    if (is.null(order)) return(NULL)
+    if (length(order) == 0) return(NULL)
+
+    if (is.character(order) && length(order) == 1) {
+      order <- unlist(strsplit(order, ",", fixed = TRUE))
+    }
+
+    order <- trimws(as.character(order))
+    order[nzchar(order)]
+  }
+
+  apply_manual_order <- function(order, groups) {
+    order <- parse_order(order)
+    if (is.null(order) || length(order) == 0) return(groups)
+
+    matched <- order[order %in% groups]
+    c(matched, setdiff(groups, matched))
+  }
   
-  col_order  <- group_vals
-  line_order <- group_vals
+  manual_legend_order <- parse_order(legend_order)
+  if (!is.null(manual_legend_order)) {
+    group_vals <- apply_manual_order(manual_legend_order, group_vals)
+  }
+
+  col_order_values  <- group_vals
+  line_order_values <- group_vals
   
   if (has_col && sort_col != "none") {
     col_totals <- df |>
@@ -223,7 +252,7 @@ plot_generic_ts <- function(
         .groups = "drop"
       )
     
-    col_order <- col_totals |>
+    col_order_values <- col_totals |>
       dplyr::arrange(if (sort_col == "asc") val else -val) |>
       dplyr::pull(.data[[group_name]])
   }
@@ -234,14 +263,26 @@ plot_generic_ts <- function(
       dplyr::slice_tail(n = 1) |>
       dplyr::ungroup()
     
-    line_order <- line_vals |>
+    line_order_values <- line_vals |>
       dplyr::arrange(
         if (sort_line == "asc") .data[[y_line_name]] else -.data[[y_line_name]]
       ) |>
       dplyr::pull(.data[[group_name]])
   }
+
+  if (!is.null(manual_legend_order)) {
+    col_order_values <- apply_manual_order(manual_legend_order, col_order_values)
+    line_order_values <- apply_manual_order(manual_legend_order, line_order_values)
+  }
+
+  col_order_values <- apply_manual_order(col_order, col_order_values)
+  line_order_values <- apply_manual_order(line_order, line_order_values)
   
-  legend_order <- unique(c(col_order, line_order))
+  legend_order_values <- if (!is.null(manual_legend_order)) {
+    apply_manual_order(manual_legend_order, unique(c(col_order_values, line_order_values)))
+  } else {
+    unique(c(col_order_values, line_order_values))
+  }
   
   # =========================
   # KEYS
@@ -251,7 +292,7 @@ plot_generic_ts <- function(
     df$col_key <- interaction(df[[group_name]], col_label, sep = ".")
     df$col_key <- factor(
       df$col_key,
-      levels = paste(col_order, col_label, sep = ".")
+      levels = paste(col_order_values, col_label, sep = ".")
     )
   }
   
@@ -259,7 +300,7 @@ plot_generic_ts <- function(
     df$line_key <- interaction(df[[group_name]], line_label, sep = ".")
     df$line_key <- factor(
       df$line_key,
-      levels = paste(line_order, line_label, sep = ".")
+      levels = paste(line_order_values, line_label, sep = ".")
     )
   }
   
@@ -309,8 +350,8 @@ plot_generic_ts <- function(
       paste(group_vals, col_label, sep = ".")
     )
     
-    fill_keys   <- paste(legend_order, col_label, sep = ".")
-    fill_labels <- make_labels(legend_order, col_label)
+    fill_keys   <- paste(legend_order_values, col_label, sep = ".")
+    fill_labels <- make_labels(legend_order_values, col_label)
   }
   
   if (has_line) {
@@ -319,8 +360,8 @@ plot_generic_ts <- function(
       paste(group_vals, line_label, sep = ".")
     )
     
-    colour_keys   <- paste(legend_order, line_label, sep = ".")
-    colour_labels <- make_labels(legend_order, line_label)
+    colour_keys   <- paste(legend_order_values, line_label, sep = ".")
+    colour_labels <- make_labels(legend_order_values, line_label)
   }
   
   # =========================
@@ -468,7 +509,7 @@ plot_generic_ts <- function(
   
   if (has_line) {
     df <- df |>
-      dplyr::arrange(factor(.data[[group_name]], levels = line_order))
+      dplyr::arrange(factor(.data[[group_name]], levels = line_order_values))
     
     p <- p +
       ggplot2::geom_line(
@@ -627,7 +668,7 @@ plot_generic_ts <- function(
   # =========================
   
   p <- p +
-    theme_sopi(family = family) +
+    theme_sopi(family = family, base_size = base_size) +
     ggplot2::theme(
       axis.line = ggplot2::element_blank(),
       axis.line.x = ggplot2::element_line(colour = "#dad9d9"),

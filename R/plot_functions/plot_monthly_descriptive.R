@@ -81,7 +81,8 @@ plot_monthly_descriptive <- function(
     y_accuracy = 1,
     y_scale = 1,
     colour_palette = NULL,
-    family = "DIN"
+    family = "DIN",
+    base_size = 10.5
 ) {
   
   y_quo <- rlang::enquo(y)
@@ -388,7 +389,7 @@ plot_monthly_descriptive <- function(
     
     theme_sopi(
       family = family,
-      base_size = 10,
+      base_size = base_size,
       panel.border = element_blank(),
       legend.title = element_blank(),
       legend.key.width  = unit(4, "mm"),
