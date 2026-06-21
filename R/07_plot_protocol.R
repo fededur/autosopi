@@ -33,9 +33,10 @@ sopi_plot_protocol <- function() {
       "secondary_min_breaks",
       "secondary_max_breaks",
       "y_min_breaks",
-      "y_max_breaks"
+      "y_max_breaks",
+      "x_breaks"
     ),
-    axis_labels = c("y_col_scale", "y_line_scale", "y_scale"),
+    axis_labels = c("y_col_accuracy", "y_line_accuracy", "y_col_scale", "y_line_scale", "y_scale"),
     label_aliases = c("y_lab")
   )
 }
