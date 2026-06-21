@@ -48,8 +48,8 @@ run_charts <- function(run_plan, config, project_root) {
         save_chart_svg(
           plot = plot,
           output_path = output_path,
-          width = as.numeric(resolved$plot_args$width %||% resolved$global$width %||% 9),
-          height = as.numeric(resolved$plot_args$height %||% resolved$global$height %||% 5)
+          width = as.numeric(resolved$plot_args$width %||% resolved$global$width %||% 230),
+          height = as.numeric(resolved$plot_args$height %||% resolved$global$height %||% 130)
         )
       }
     }, error = function(e) {

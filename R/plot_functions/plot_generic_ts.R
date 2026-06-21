@@ -310,11 +310,18 @@ plot_generic_ts <- function(
   
   make_labels <- function(groups, type_label) {
     if (!has_group) return(rep(type_label, length(groups)))
-    if (is.null(label_lookup)) return(paste(groups, tolower(type_label)))
+    single_measure <- xor(has_col, has_line)
+
+    if (is.null(label_lookup)) {
+      if (single_measure) return(groups)
+      return(paste(groups, tolower(type_label)))
+    }
     
     mapped <- label_lookup[groups]
     mapped[is.na(mapped)] <- groups[is.na(mapped)]
     
+    if (single_measure) return(unname(mapped))
+
     paste(mapped, tolower(type_label))
   }
   

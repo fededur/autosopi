@@ -353,6 +353,8 @@ chart_arg_registry <- function() {
     list(section = "advanced", args = "secondary_max_breaks", id = "secondary_max_breaks", type = "numeric", label = "Secondary max breaks", default = 6, min = 2),
     list(section = "advanced", args = "y_min_breaks", id = "y_min_breaks", type = "numeric", label = "Y min breaks", default = 4, min = 2),
     list(section = "advanced", args = "y_max_breaks", id = "y_max_breaks", type = "numeric", label = "Y max breaks", default = 5, min = 2),
+    list(section = "advanced", args = "sort_col", id = "sort_col", type = "select", label = "Sort columns", default = "none", choices = c("none", "asc", "desc")),
+    list(section = "advanced", args = "sort_line", id = "sort_line", type = "select", label = "Sort lines", default = "none", choices = c("none", "asc", "desc")),
     list(section = "advanced", args = "legend_order", id = "legend_order", type = "text", label = "Legend order", default = ""),
     list(section = "advanced", args = "col_order", id = "col_order", type = "text", label = "Column order", default = ""),
     list(section = "advanced", args = "line_order", id = "line_order", type = "text", label = "Line order", default = "")
@@ -1495,10 +1497,10 @@ ui <- fluidPage(
             textInput("output_file", "SVG filename", value = "preview_chart.svg"),
             tags$p(class = "sopi-note", "Resolved SVG save path:"),
             verbatimTextOutput("resolved_svg_path"),
-            tags$p(class = "sopi-note", "Export size for this saved SVG."),
+            tags$p(class = "sopi-note", "Export size for this saved SVG, in millimetres."),
             fluidRow(
-              column(6, numericInput("width", "Width", value = 9, min = 3, step = 0.5)),
-              column(6, numericInput("height", "Height", value = 5, min = 3, step = 0.5))
+              column(6, numericInput("width", "Width (mm)", value = 230, min = 30, step = 5)),
+              column(6, numericInput("height", "Height (mm)", value = 130, min = 30, step = 5))
             ),
             textInput("plot_id", "Plot ID", value = "preview_chart"),
             textInput("data_source_id", "Data source ID", value = "preview_chart_data"),

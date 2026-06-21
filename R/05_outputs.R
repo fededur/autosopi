@@ -1,4 +1,4 @@
-save_chart_svg <- function(plot, output_path, width = 9, height = 5) {
+save_chart_svg <- function(plot, output_path, width = 230, height = 130) {
   dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
 
   ggplot2::ggsave(
@@ -6,6 +6,7 @@ save_chart_svg <- function(plot, output_path, width = 9, height = 5) {
     plot = plot,
     width = width,
     height = height,
+    units = "mm",
     device = svglite::svglite
   )
 
