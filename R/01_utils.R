@@ -76,6 +76,27 @@ parse_scalar <- function(value, type = "character") {
     integer = as.integer(value),
     logical = tolower(value) %in% c("true", "t", "yes", "y", "1"),
     character_vector = trimws(strsplit(value, ",", fixed = TRUE)[[1]]),
+    named_character_vector = {
+      lines <- trimws(strsplit(value, "\n", fixed = TRUE)[[1]])
+      lines <- lines[nzchar(lines)]
+      keys <- character()
+      values <- character()
+
+      for (line in lines) {
+        parts <- strsplit(line, "=", fixed = TRUE)[[1]]
+        if (length(parts) < 2) next
+
+        key <- trimws(parts[[1]])
+        mapped_value <- trimws(paste(parts[-1], collapse = "="))
+
+        if (!nzchar(key) || !nzchar(mapped_value)) next
+
+        keys <- c(keys, key)
+        values <- c(values, mapped_value)
+      }
+
+      if (length(keys) == 0) NULL else stats::setNames(values, keys)
+    },
     numeric_vector = as.numeric(trimws(strsplit(value, ",", fixed = TRUE)[[1]])),
     name = value,
     value

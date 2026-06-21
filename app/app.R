@@ -148,6 +148,39 @@ parse_guess <- function(value) {
   value
 }
 
+parse_named_mapping_text <- function(text) {
+  if (is.null(text) || !nzchar(trimws(text))) return(NULL)
+
+  lines <- trimws(strsplit(text, "\n", fixed = TRUE)[[1]])
+  lines <- lines[nzchar(lines) & !startsWith(lines, "#")]
+
+  keys <- character()
+  values <- character()
+
+  for (line in lines) {
+    parts <- if (grepl("=", line, fixed = TRUE)) {
+      strsplit(line, "=", fixed = TRUE)[[1]]
+    } else {
+      strsplit(line, ",", fixed = TRUE)[[1]]
+    }
+
+    if (length(parts) < 2) next
+
+    key <- trimws(parts[[1]])
+    value <- trimws(paste(parts[-1], collapse = if (grepl("=", line, fixed = TRUE)) "=" else ","))
+
+    if (!nzchar(key) || !nzchar(value)) next
+
+    keys <- c(keys, key)
+    values <- c(values, value)
+  }
+
+  if (length(keys) == 0) return(NULL)
+
+  mapping <- stats::setNames(values, keys)
+  mapping[!duplicated(names(mapping))]
+}
+
 is_hex_colour <- function(value) {
   grepl("^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$", trimws(value))
 }
@@ -313,6 +346,7 @@ chart_arg_registry <- function() {
     list(section = "labels", args = "col_label", id = "column_legend_label", type = "text", label = "Column legend label", default = "Revenue"),
     list(section = "labels", args = "y_line_label", id = "line_axis_label", type = "text", label = "Line axis label", default = "Export volume (tonnes)"),
     list(section = "labels", args = "line_label", id = "line_legend_label", type = "text", label = "Line legend label", default = "Volume"),
+    list(section = "labels", args = "labels", id = "legend_labels", type = "mapping", label = "Legend labels", default = ""),
     list(section = "advanced", args = "primary_min_breaks", id = "primary_min_breaks", type = "numeric", label = "Primary min breaks", default = 4, min = 2),
     list(section = "advanced", args = "primary_max_breaks", id = "primary_max_breaks", type = "numeric", label = "Primary max breaks", default = 6, min = 2),
     list(section = "advanced", args = "secondary_min_breaks", id = "secondary_min_breaks", type = "numeric", label = "Secondary min breaks", default = 4, min = 2),
@@ -388,6 +422,19 @@ render_chart_registry_entry <- function(entry, function_name, data = NULL) {
     return(numericInput(entry$id, label, value = entry$default, min = entry$min %||% NA))
   }
 
+  if (identical(entry$type, "mapping")) {
+    return(tagList(
+      textAreaInput(
+        entry$id,
+        label,
+        value = entry$default %||% "",
+        rows = 4,
+        placeholder = "raw_category = Display label\nanother_raw_category = Another display label"
+      ),
+      tags$p(class = "sopi-note", "Optional. Use one label mapping per line: raw value = display label.")
+    ))
+  }
+
   textInput(entry$id, label, value = entry$default %||% "")
 }
 
@@ -417,6 +464,11 @@ collect_chart_registry_args <- function(input, function_name) {
 
     if (identical(entry$type, "text") && is_blank(value)) {
       next
+    }
+
+    if (identical(entry$type, "mapping")) {
+      value <- parse_named_mapping_text(value)
+      if (is.null(value) || length(value) == 0) next
     }
 
     for (arg_name in intersect(entry$args, fn_args)) {
@@ -784,6 +836,9 @@ next_sort_order <- function(plots, sector) {
 
 config_value_type <- function(value) {
   if (is.logical(value)) return("logical")
+  if (is.character(value) && !is.null(names(value)) && any(nzchar(names(value)))) {
+    return("named_character_vector")
+  }
   if (is.numeric(value) && length(value) == 1 && !is.na(value) && value == as.integer(value)) return("integer")
   if (is.numeric(value)) return("numeric")
   "character"
@@ -792,6 +847,9 @@ config_value_type <- function(value) {
 format_config_value <- function(value) {
   if (is.null(value) || length(value) == 0) return(NA_character_)
   if (is.logical(value)) return(ifelse(isTRUE(value), "TRUE", "FALSE"))
+  if (is.character(value) && !is.null(names(value)) && any(nzchar(names(value)))) {
+    return(paste(paste(names(value), unname(value), sep = " = "), collapse = "\n"))
+  }
   if (length(value) > 1) return(paste(value, collapse = ","))
   as.character(value)
 }
