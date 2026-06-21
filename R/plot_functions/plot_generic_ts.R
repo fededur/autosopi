@@ -13,6 +13,8 @@ plot_generic_ts <- function(
     x_breaks = NULL,
     y_line_accuracy = NULL,
     y_col_accuracy  = NULL,
+    y_line_scale = 1,
+    y_col_scale  = 1,
     primary_min_breaks = 3,
     primary_max_breaks = 6,
     secondary_min_breaks = 3,
@@ -45,6 +47,18 @@ plot_generic_ts <- function(
   x_freq    <- match.arg(x_freq)
   period_type <- match.arg(period_type)
   col_position <- match.arg(col_position)
+
+  clean_axis_scale <- function(value, arg_name) {
+    if (is.null(value) || length(value) == 0 || is.na(value)) return(1)
+    value <- suppressWarnings(as.numeric(value))
+    if (!is.finite(value) || value <= 0) {
+      stop(arg_name, " must be a positive number.", call. = FALSE)
+    }
+    value
+  }
+
+  y_line_scale <- clean_axis_scale(y_line_scale, "y_line_scale")
+  y_col_scale <- clean_axis_scale(y_col_scale, "y_col_scale")
   
   # =========================
   # DATE HELPERS — BASE R ONLY
@@ -535,12 +549,14 @@ plot_generic_ts <- function(
   # =========================
   
   line_labeller <- scales::label_number(
-    accuracy = y_line_accuracy,
+    accuracy = y_line_accuracy * y_line_scale,
+    scale = y_line_scale,
     big.mark = ","
   )
   
   col_labeller <- scales::label_number(
-    accuracy = y_col_accuracy,
+    accuracy = y_col_accuracy * y_col_scale,
+    scale = y_col_scale,
     big.mark = ","
   )
   

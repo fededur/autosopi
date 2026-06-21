@@ -35,6 +35,7 @@ sopi_plot_protocol <- function() {
       "y_min_breaks",
       "y_max_breaks"
     ),
+    axis_labels = c("y_col_scale", "y_line_scale", "y_scale"),
     label_aliases = c("y_lab")
   )
 }
@@ -67,7 +68,8 @@ sopi_plot_standard_arg_names <- function(include_aliases = TRUE) {
     protocol$palettes,
     protocol$style,
     protocol$layout,
-    protocol$axis_breaks
+    protocol$axis_breaks,
+    protocol$axis_labels
   )
 
   if (include_aliases) {

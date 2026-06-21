@@ -337,9 +337,9 @@ chart_arg_registry <- function() {
     list(section = "fields", args = "y_line", id = "line_value", type = "field", label = "Line value", optional = TRUE, match = "volume"),
     list(section = "fields", args = "driver", id = "driver_field", type = "field", label = "Driver field", optional = FALSE, match = "driver"),
     list(section = "fields", args = "total", id = "total_field", type = "field", label = "Total field", optional = FALSE, match = "total"),
-    list(section = "options", args = "forecast", id = "forecast", type = "checkbox", label = "Show forecast shading", default = TRUE),
-    list(section = "options", args = "forecast_start", id = "forecast_start_year", type = "numeric", label = "Forecast start year", default = 2026, min = 1990),
-    list(section = "options", args = "forecast_end", id = "forecast_end_year", type = "numeric", label = "Forecast end year", default = 2030, min = 1990),
+    list(section = "options", args = "forecast", id = "forecast", type = "checkbox", label = "Show forecast shading", default = FALSE),
+    list(section = "options", args = "forecast_start", id = "forecast_start_year", type = "numeric", label = "Forecast start year", default = NA_real_, min = 1990),
+    list(section = "options", args = "forecast_end", id = "forecast_end_year", type = "numeric", label = "Forecast end year", default = NA_real_, min = 1990),
     list(section = "options", args = "x_freq", id = "x_freq", type = "select", label = "X frequency", default = "auto", choices = c("auto", "yearly", "quarterly", "monthly")),
     list(section = "options", args = "col_position", id = "column_position", type = "select", label = "Column position", default = "stacked", choices = c("stacked", "dodge")),
     list(section = "labels", args = c("y_label", "y_lab", "y_col_label"), id = "column_axis_label", type = "text", label = "Y-axis label", default = "Value"),
@@ -353,6 +353,8 @@ chart_arg_registry <- function() {
     list(section = "advanced", args = "secondary_max_breaks", id = "secondary_max_breaks", type = "numeric", label = "Secondary max breaks", default = 6, min = 2),
     list(section = "advanced", args = "y_min_breaks", id = "y_min_breaks", type = "numeric", label = "Y min breaks", default = 4, min = 2),
     list(section = "advanced", args = "y_max_breaks", id = "y_max_breaks", type = "numeric", label = "Y max breaks", default = 5, min = 2),
+    list(section = "advanced", args = "y_col_scale", id = "y_col_scale", type = "numeric", label = "Column value scale", default = 1, min = 0.000000001),
+    list(section = "advanced", args = "y_line_scale", id = "y_line_scale", type = "numeric", label = "Line value scale", default = 1, min = 0.000000001),
     list(section = "advanced", args = "sort_col", id = "sort_col", type = "select", label = "Sort columns", default = "none", choices = c("none", "asc", "desc")),
     list(section = "advanced", args = "sort_line", id = "sort_line", type = "select", label = "Sort lines", default = "none", choices = c("none", "asc", "desc")),
     list(section = "advanced", args = "legend_order", id = "legend_order", type = "text", label = "Legend order", default = ""),
@@ -468,6 +470,10 @@ collect_chart_registry_args <- function(input, function_name) {
       next
     }
 
+    if (identical(entry$type, "numeric") && (length(value) == 0 || is.na(value))) {
+      next
+    }
+
     if (identical(entry$type, "mapping")) {
       value <- parse_named_mapping_text(value)
       if (is.null(value) || length(value) == 0) next
@@ -572,12 +578,26 @@ chart_context_args <- function(input) {
     sector = input$sector,
     family = input$font_family,
     base_size = input$base_size,
-    fontsize = input$base_size,
-    forecast_start_year = input$forecast_start_year,
-    forecast_end_year = input$forecast_end_year,
-    forecast_start = input$forecast_start_year,
-    forecast_end = input$forecast_end_year
+    fontsize = input$base_size
   )
+}
+
+forecast_year_defaults <- function(release_year, release_round) {
+  release_year <- suppressWarnings(as.integer(release_year))
+  if (length(release_year) == 0 || is.na(release_year)) {
+    return(list(start = NA_integer_, end = NA_integer_))
+  }
+
+  release_round <- tolower(trimws(as.character(release_round)))
+  if (identical(release_round, "december")) {
+    start_year <- release_year + 1L
+    end_year <- start_year + 2L
+  } else {
+    start_year <- release_year
+    end_year <- start_year + 4L
+  }
+
+  list(start = start_year, end = end_year)
 }
 
 empty_config <- function() {
@@ -1520,6 +1540,7 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   output_refresh <- reactiveVal(0)
   palette_refresh <- reactiveVal(0)
+  last_auto_forecast_years <- reactiveVal(NULL)
 
   metadata_resource <- reactive({
     palette_refresh()
@@ -1551,6 +1572,35 @@ server <- function(input, output, session) {
 
   observeEvent(list(input$release_year, input$release_round, input$sector), {
     output_refresh(output_refresh() + 1)
+  }, ignoreInit = TRUE)
+
+  observeEvent(list(input$forecast, input$release_year, input$release_round), {
+    if (!isTRUE(input$forecast)) {
+      last_auto_forecast_years(NULL)
+      return()
+    }
+
+    defaults <- forecast_year_defaults(input$release_year, input$release_round)
+    if (is.na(defaults$start) || is.na(defaults$end)) {
+      return()
+    }
+
+    current_start <- suppressWarnings(as.integer(input$forecast_start_year))
+    current_end <- suppressWarnings(as.integer(input$forecast_end_year))
+    last_auto <- last_auto_forecast_years()
+
+    is_empty <- length(current_start) == 0 || length(current_end) == 0 ||
+      is.na(current_start) || is.na(current_end)
+    is_unchanged_auto <- !is.null(last_auto) &&
+      length(current_start) > 0 && length(current_end) > 0 &&
+      identical(current_start, last_auto$start) &&
+      identical(current_end, last_auto$end)
+
+    if (is.null(last_auto) || is_empty || is_unchanged_auto) {
+      updateNumericInput(session, "forecast_start_year", value = defaults$start)
+      updateNumericInput(session, "forecast_end_year", value = defaults$end)
+      last_auto_forecast_years(defaults)
+    }
   }, ignoreInit = TRUE)
 
   output$saved_palette_selector <- renderUI({
