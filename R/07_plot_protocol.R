@@ -26,7 +26,7 @@ sopi_plot_protocol <- function() {
     palette_aliases = c("fill_palette", "colour_palette"),
     style = c("family", "base_size"),
     style_aliases = c("fontsize"),
-    layout = c("col_position", "sort_col", "sort_line", "sort_desc", "sort", "legend_order", "col_order", "line_order"),
+    layout = c("col_position", "primary_axis", "sort_col", "sort_line", "sort_desc", "sort", "legend_order", "col_order", "line_order"),
     axis_breaks = c(
       "primary_min_breaks",
       "primary_max_breaks",
@@ -34,6 +34,7 @@ sopi_plot_protocol <- function() {
       "secondary_max_breaks",
       "y_min_breaks",
       "y_max_breaks",
+      "n_breaks",
       "x_breaks"
     ),
     axis_labels = c("y_col_accuracy", "y_line_accuracy", "y_col_scale", "y_line_scale", "y_scale"),

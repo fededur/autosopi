@@ -353,6 +353,8 @@ chart_arg_registry <- function() {
     list(section = "advanced", args = "secondary_max_breaks", id = "secondary_max_breaks", type = "numeric", label = "Secondary max breaks", default = 6, min = 2),
     list(section = "advanced", args = "y_min_breaks", id = "y_min_breaks", type = "numeric", label = "Y min breaks", default = 4, min = 2),
     list(section = "advanced", args = "y_max_breaks", id = "y_max_breaks", type = "numeric", label = "Y max breaks", default = 5, min = 2),
+    list(section = "advanced", args = "n_breaks", id = "n_breaks", type = "numeric", label = "Number of y-axis breaks", default = NA_real_, min = 2),
+    list(section = "advanced", args = "primary_axis", id = "primary_axis", type = "select", label = "Primary axis", default = "line", choices = c("line", "column")),
     list(section = "advanced", args = "x_breaks", id = "x_breaks", type = "text", label = "X breaks", default = ""),
     list(section = "advanced", args = "y_col_accuracy", id = "y_col_accuracy", type = "numeric", label = "Column label accuracy", default = NA_real_, min = 0),
     list(section = "advanced", args = "y_line_accuracy", id = "y_line_accuracy", type = "numeric", label = "Line label accuracy", default = NA_real_, min = 0),

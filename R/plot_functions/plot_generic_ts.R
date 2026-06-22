@@ -15,10 +15,12 @@ plot_generic_ts <- function(
     y_col_accuracy  = NULL,
     y_line_scale = 1,
     y_col_scale  = 1,
+    n_breaks = NULL,
     primary_min_breaks = 3,
     primary_max_breaks = 6,
     secondary_min_breaks = 3,
     secondary_max_breaks = 6,
+    primary_axis = c("line", "column"),
     line_label = "Revenue",
     col_label  = "Volume",
     labels  = NULL,
@@ -47,6 +49,7 @@ plot_generic_ts <- function(
   x_freq    <- match.arg(x_freq)
   period_type <- match.arg(period_type)
   col_position <- match.arg(col_position)
+  primary_axis <- match.arg(primary_axis)
 
   clean_axis_scale <- function(value, arg_name) {
     if (is.null(value) || length(value) == 0 || is.na(value)) return(1)
@@ -59,6 +62,23 @@ plot_generic_ts <- function(
 
   y_line_scale <- clean_axis_scale(y_line_scale, "y_line_scale")
   y_col_scale <- clean_axis_scale(y_col_scale, "y_col_scale")
+
+  clean_break_count <- function(value) {
+    if (is.null(value) || length(value) == 0 || is.na(value)) return(NULL)
+    value <- suppressWarnings(as.integer(value))
+    if (!is.finite(value) || value < 2) {
+      stop("n_breaks must be an integer greater than or equal to 2.", call. = FALSE)
+    }
+    value
+  }
+
+  n_breaks <- clean_break_count(n_breaks)
+  if (!is.null(n_breaks)) {
+    primary_min_breaks <- n_breaks
+    primary_max_breaks <- n_breaks
+    secondary_min_breaks <- n_breaks
+    secondary_max_breaks <- n_breaks
+  }
   
   # =========================
   # DATE HELPERS — BASE R ONLY
@@ -216,11 +236,65 @@ plot_generic_ts <- function(
   if (!has_line && !has_col) {
     stop("At least one of y_line or y_col must be provided")
   }
+
+  if (!has_line) {
+    primary_axis <- "column"
+  } else if (!has_col) {
+    primary_axis <- "line"
+  }
+
+  line_is_primary <- identical(primary_axis, "line")
+  col_is_primary <- identical(primary_axis, "column")
   
   label_lookup <- labels
   group_vals <- unique(as.character(df[[group_name]]))
   
   is_date <- inherits(df[[x_name]], c("Date", "POSIXct", "POSIXlt"))
+
+  parse_x_break_values <- function(breaks, is_date) {
+    if (is.null(breaks) || length(breaks) == 0) return(NULL)
+
+    if (inherits(breaks, "Date")) return(breaks)
+    if (inherits(breaks, c("POSIXct", "POSIXlt"))) return(as.Date(breaks))
+    if (is.numeric(breaks)) {
+      if (is_date && all(!is.na(breaks)) && all(breaks >= 1000 & breaks <= 9999)) {
+        return(as.Date(paste0(as.integer(breaks), "-01-01")))
+      }
+      return(breaks)
+    }
+
+    if (!is.character(breaks)) return(breaks)
+
+    values <- trimws(unlist(strsplit(breaks, "[,;\\n]", perl = TRUE)))
+    values <- values[nzchar(values)]
+    if (length(values) == 0) return(NULL)
+
+    if (is_date) {
+      interval_pattern <- "^[0-9]+\\s+(day|days|week|weeks|month|months|year|years)$"
+      if (length(values) == 1 && grepl(interval_pattern, values, ignore.case = TRUE)) {
+        return(values)
+      }
+
+      numeric_values <- suppressWarnings(as.numeric(values))
+      if (all(!is.na(numeric_values)) && all(numeric_values >= 1000 & numeric_values <= 9999)) {
+        return(as.Date(paste0(as.integer(numeric_values), "-01-01")))
+      }
+
+      parsed_dates <- parse_flexible_date(values)
+      if (inherits(parsed_dates, "Date") && any(!is.na(parsed_dates))) {
+        return(parsed_dates)
+      }
+    }
+
+    numeric_values <- suppressWarnings(as.numeric(values))
+    if (all(!is.na(numeric_values))) {
+      return(numeric_values)
+    }
+
+    values
+  }
+
+  x_breaks <- parse_x_break_values(x_breaks, is_date)
   
   if (is_date && x_freq == "auto") {
     x_freq <- infer_date_frequency(df[[x_name]])
@@ -392,8 +466,8 @@ plot_generic_ts <- function(
   if (has_line) {
     axis_line <- get_nice_breaks(
       max(df[[y_line_name]], na.rm = TRUE),
-      min_breaks = primary_min_breaks,
-      max_breaks = primary_max_breaks
+      min_breaks = if (line_is_primary) primary_min_breaks else secondary_min_breaks,
+      max_breaks = if (line_is_primary) primary_max_breaks else secondary_max_breaks
     )
     
     if (is.null(y_line_accuracy)) {
@@ -415,8 +489,8 @@ plot_generic_ts <- function(
     
     axis_col <- get_nice_breaks(
       max(stacked$total, na.rm = TRUE),
-      min_breaks = if (has_line) secondary_min_breaks else primary_min_breaks,
-      max_breaks = if (has_line) secondary_max_breaks else primary_max_breaks
+      min_breaks = if (col_is_primary) primary_min_breaks else secondary_min_breaks,
+      max_breaks = if (col_is_primary) primary_max_breaks else secondary_max_breaks
     )
     
     if (is.null(y_col_accuracy)) {
@@ -425,17 +499,36 @@ plot_generic_ts <- function(
   }
   
   scale_factor <- if (has_line && has_col) {
-    axis_line$rounded_max / axis_col$rounded_max
+    if (line_is_primary) {
+      axis_line$rounded_max / axis_col$rounded_max
+    } else {
+      axis_col$rounded_max / axis_line$rounded_max
+    }
   } else {
     1
   }
+
+  line_plot_scale <- if (has_line && has_col && col_is_primary) scale_factor else 1
+  col_plot_scale <- if (has_line && has_col && line_is_primary) scale_factor else 1
   
-  ymax <- if (has_line) axis_line$rounded_max else axis_col$rounded_max
+  ymax <- if (line_is_primary && has_line) {
+    axis_line$rounded_max
+  } else {
+    axis_col$rounded_max
+  }
   upper_limit <- if (forecast) ymax * forecast_max_mult else ymax
   
   max_plot <- max(
-    if (has_line) max(df[[y_line_name]], na.rm = TRUE) else 0,
-    if (has_col) max(stacked$total * scale_factor, na.rm = TRUE) else 0
+    if (has_line) {
+      max(df[[y_line_name]] * line_plot_scale, na.rm = TRUE)
+    } else {
+      0
+    },
+    if (has_col) {
+      max(stacked$total * col_plot_scale, na.rm = TRUE)
+    } else {
+      0
+    }
   )
   
   p <- ggplot2::ggplot(df, ggplot2::aes(x = .data[[x_name]]))
@@ -516,7 +609,7 @@ plot_generic_ts <- function(
     p <- p +
       ggplot2::geom_col(
         ggplot2::aes(
-          y = .data[[y_col_name]] * scale_factor,
+          y = .data[[y_col_name]] * col_plot_scale,
           fill = col_key
         ),
         width = width,
@@ -536,7 +629,7 @@ plot_generic_ts <- function(
       ggplot2::geom_line(
         data = df,
         ggplot2::aes(
-          y = .data[[y_line_name]],
+          y = .data[[y_line_name]] * line_plot_scale,
           colour = line_key,
           group = .data[[group_name]]
         ),
@@ -547,6 +640,14 @@ plot_generic_ts <- function(
   # =========================
   # SCALES
   # =========================
+
+  if (is.null(y_line_accuracy)) {
+    y_line_accuracy <- 1
+  }
+
+  if (is.null(y_col_accuracy)) {
+    y_col_accuracy <- 1
+  }
   
   line_labeller <- scales::label_number(
     accuracy = y_line_accuracy * y_line_scale,
@@ -578,7 +679,7 @@ plot_generic_ts <- function(
       )
   }
   
-  if (has_line && has_col) {
+  if (has_line && has_col && line_is_primary) {
     p <- p +
       ggplot2::scale_y_continuous(
         name = y_line_label,
@@ -591,6 +692,21 @@ plot_generic_ts <- function(
           name = y_col_label,
           breaks = axis_col$breaks,
           labels = col_labeller
+        )
+      )
+  } else if (has_line && has_col && col_is_primary) {
+    p <- p +
+      ggplot2::scale_y_continuous(
+        name = y_col_label,
+        limits = c(0, upper_limit),
+        breaks = axis_col$breaks,
+        labels = col_labeller,
+        expand = c(0, 0),
+        sec.axis = ggplot2::sec_axis(
+          ~ . / scale_factor,
+          name = y_line_label,
+          breaks = axis_line$breaks,
+          labels = line_labeller
         )
       )
   } else if (has_line) {
@@ -638,13 +754,23 @@ plot_generic_ts <- function(
         by = "3 months"
       )
       
-      p <- p +
-        ggplot2::scale_x_date(
-          name = x_label,
-          breaks = if (!is.null(x_breaks)) x_breaks else breaks_vec,
-          date_labels = "%b %Y",
-          expand = c(0, expand_x)
-        )
+      if (!is.null(x_breaks) && is.character(x_breaks)) {
+        p <- p +
+          ggplot2::scale_x_date(
+            name = x_label,
+            date_breaks = x_breaks,
+            date_labels = "%b %Y",
+            expand = c(0, expand_x)
+          )
+      } else {
+        p <- p +
+          ggplot2::scale_x_date(
+            name = x_label,
+            breaks = if (!is.null(x_breaks)) x_breaks else breaks_vec,
+            date_labels = "%b %Y",
+            expand = c(0, expand_x)
+          )
+      }
       
     } else {
       
@@ -654,23 +780,33 @@ plot_generic_ts <- function(
         "monthly" = "%b %Y"
       )
       
-      date_breaks_val <- if (!is.null(x_breaks)) {
-        x_breaks
+      if (!is.null(x_breaks) && !is.character(x_breaks)) {
+        p <- p +
+          ggplot2::scale_x_date(
+            name = x_label,
+            breaks = x_breaks,
+            date_labels = date_labels,
+            expand = c(0, expand_x)
+          )
       } else {
-        switch(
-          x_freq,
-          "yearly"  = "1 year",
-          "monthly" = "1 month"
-        )
+        date_breaks_val <- if (!is.null(x_breaks)) {
+          x_breaks
+        } else {
+          switch(
+            x_freq,
+            "yearly"  = "1 year",
+            "monthly" = "1 month"
+          )
+        }
+
+        p <- p +
+          ggplot2::scale_x_date(
+            name = x_label,
+            date_breaks = date_breaks_val,
+            date_labels = date_labels,
+            expand = c(0, expand_x)
+          )
       }
-      
-      p <- p +
-        ggplot2::scale_x_date(
-          name = x_label,
-          date_breaks = date_breaks_val,
-          date_labels = date_labels,
-          expand = c(0, expand_x)
-        )
     }
     
   } else {
