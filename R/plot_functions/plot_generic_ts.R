@@ -7,10 +7,11 @@ plot_generic_ts <- function(
     y_line = NULL,
     y_col  = NULL,
     group = NULL,
-    y_line_label = "Export revenue (NZ$)",
-    y_col_label  = "Export volume (Tonnes)",
+    y_line_label = NULL,
+    y_col_label  = NULL,
     x_label  = NULL,
     x_breaks = NULL,
+    x_n_breaks = NULL,
     y_line_accuracy = NULL,
     y_col_accuracy  = NULL,
     y_line_scale = 1,
@@ -21,8 +22,8 @@ plot_generic_ts <- function(
     secondary_min_breaks = 3,
     secondary_max_breaks = 6,
     primary_axis = c("line", "column"),
-    line_label = "Revenue",
-    col_label  = "Volume",
+    line_label = NULL,
+    col_label  = NULL,
     labels  = NULL,
     palette = NULL,
     palette_fill = NULL,
@@ -73,6 +74,7 @@ plot_generic_ts <- function(
   }
 
   n_breaks <- clean_break_count(n_breaks)
+  x_n_breaks <- clean_break_count(x_n_breaks)
   if (!is.null(n_breaks)) {
     primary_min_breaks <- n_breaks
     primary_max_breaks <- n_breaks
@@ -295,6 +297,26 @@ plot_generic_ts <- function(
   }
 
   x_breaks <- parse_x_break_values(x_breaks, is_date)
+
+  make_x_n_breaks <- function(x_values, n, is_date) {
+    if (is.null(n)) return(NULL)
+
+    x_values <- x_values[!is.na(x_values)]
+    if (length(x_values) == 0) return(NULL)
+
+    if (is_date) {
+      breaks <- pretty(x_values, n = n)
+      return(as.Date(breaks))
+    }
+
+    pretty(range(x_values, na.rm = TRUE), n = n)
+  }
+
+  x_n_break_values <- if (is.null(x_breaks)) {
+    make_x_n_breaks(df[[x_name]], x_n_breaks, is_date)
+  } else {
+    NULL
+  }
   
   if (is_date && x_freq == "auto") {
     x_freq <- infer_date_frequency(df[[x_name]])
@@ -371,24 +393,38 @@ plot_generic_ts <- function(
   } else {
     unique(c(col_order_values, line_order_values))
   }
+
+  is_blank_label <- function(value) {
+    is.null(value) || length(value) == 0 || all(is.na(value)) ||
+      (is.character(value) && !nzchar(trimws(value[[1]])))
+  }
+
+  label_or_blank <- function(value) {
+    if (is_blank_label(value)) "" else as.character(value[[1]])
+  }
+
+  col_label_visible <- label_or_blank(col_label)
+  line_label_visible <- label_or_blank(line_label)
+  col_key_label <- ".column"
+  line_key_label <- ".line"
   
   # =========================
   # KEYS
   # =========================
   
   if (has_col) {
-    df$col_key <- interaction(df[[group_name]], col_label, sep = ".")
+    df$col_key <- interaction(df[[group_name]], col_key_label, sep = ".")
     df$col_key <- factor(
       df$col_key,
-      levels = paste(col_order_values, col_label, sep = ".")
+      levels = paste(col_order_values, col_key_label, sep = ".")
     )
   }
   
   if (has_line) {
-    df$line_key <- interaction(df[[group_name]], line_label, sep = ".")
+    df$line_key <- interaction(df[[group_name]], line_key_label, sep = ".")
     df$line_key <- factor(
       df$line_key,
-      levels = paste(line_order_values, line_label, sep = ".")
+      levels = paste(line_order_values, line_key_label, sep = ".")
     )
   }
   
@@ -397,11 +433,13 @@ plot_generic_ts <- function(
   # =========================
   
   make_labels <- function(groups, type_label) {
+    type_label <- label_or_blank(type_label)
     if (!has_group) return(rep(type_label, length(groups)))
     single_measure <- xor(has_col, has_line)
 
     if (is.null(label_lookup)) {
       if (single_measure) return(groups)
+      if (!nzchar(type_label)) return(groups)
       return(paste(groups, tolower(type_label)))
     }
     
@@ -409,6 +447,7 @@ plot_generic_ts <- function(
     mapped[is.na(mapped)] <- groups[is.na(mapped)]
     
     if (single_measure) return(unname(mapped))
+    if (!nzchar(type_label)) return(unname(mapped))
 
     paste(mapped, tolower(type_label))
   }
@@ -442,21 +481,21 @@ plot_generic_ts <- function(
   if (has_col) {
     fill_palette <- stats::setNames(
       if (!is.null(palette_fill)) palette_fill else scales::alpha(base_cols, 0.7),
-      paste(group_vals, col_label, sep = ".")
+      paste(group_vals, col_key_label, sep = ".")
     )
     
-    fill_keys   <- paste(legend_order_values, col_label, sep = ".")
-    fill_labels <- make_labels(legend_order_values, col_label)
+    fill_keys   <- paste(legend_order_values, col_key_label, sep = ".")
+    fill_labels <- make_labels(legend_order_values, col_label_visible)
   }
   
   if (has_line) {
     colour_palette <- stats::setNames(
       if (!is.null(palette_line)) palette_line else base_cols,
-      paste(group_vals, line_label, sep = ".")
+      paste(group_vals, line_key_label, sep = ".")
     )
     
-    colour_keys   <- paste(legend_order_values, line_label, sep = ".")
-    colour_labels <- make_labels(legend_order_values, line_label)
+    colour_keys   <- paste(legend_order_values, line_key_label, sep = ".")
+    colour_labels <- make_labels(legend_order_values, line_label_visible)
   }
   
   # =========================
@@ -766,7 +805,13 @@ plot_generic_ts <- function(
         p <- p +
           ggplot2::scale_x_date(
             name = x_label,
-            breaks = if (!is.null(x_breaks)) x_breaks else breaks_vec,
+            breaks = if (!is.null(x_breaks)) {
+              x_breaks
+            } else if (!is.null(x_n_break_values)) {
+              x_n_break_values
+            } else {
+              breaks_vec
+            },
             date_labels = "%b %Y",
             expand = c(0, expand_x)
           )
@@ -785,6 +830,14 @@ plot_generic_ts <- function(
           ggplot2::scale_x_date(
             name = x_label,
             breaks = x_breaks,
+            date_labels = date_labels,
+            expand = c(0, expand_x)
+          )
+      } else if (!is.null(x_n_break_values)) {
+        p <- p +
+          ggplot2::scale_x_date(
+            name = x_label,
+            breaks = x_n_break_values,
             date_labels = date_labels,
             expand = c(0, expand_x)
           )
@@ -815,6 +868,8 @@ plot_generic_ts <- function(
         name = x_label,
         breaks = if (!is.null(x_breaks)) {
           x_breaks
+        } else if (!is.null(x_n_break_values)) {
+          x_n_break_values
         } else {
           sort(unique(df[[x_name]]))
         },

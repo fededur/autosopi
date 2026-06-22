@@ -52,6 +52,7 @@ source_directory(file.path(project_root, "R", "data_functions"))
 source_directory(file.path(project_root, "R", "plot_functions"))
 
 sopi_sectors <- c(
+  "All sectors",
   "Macro",
   "Dairy",
   "Meat and Wool",
@@ -342,10 +343,10 @@ chart_arg_registry <- function() {
     list(section = "options", args = "forecast_end", id = "forecast_end_year", type = "numeric", label = "Forecast end year", default = NA_real_, min = 1990),
     list(section = "options", args = "x_freq", id = "x_freq", type = "select", label = "X frequency", default = "auto", choices = c("auto", "yearly", "quarterly", "monthly")),
     list(section = "options", args = "col_position", id = "column_position", type = "select", label = "Column position", default = "stacked", choices = c("stacked", "dodge")),
-    list(section = "labels", args = c("y_label", "y_lab", "y_col_label"), id = "column_axis_label", type = "text", label = "Y-axis label", default = "Value"),
-    list(section = "labels", args = "col_label", id = "column_legend_label", type = "text", label = "Column legend label", default = "Revenue"),
-    list(section = "labels", args = "y_line_label", id = "line_axis_label", type = "text", label = "Line axis label", default = "Export volume (tonnes)"),
-    list(section = "labels", args = "line_label", id = "line_legend_label", type = "text", label = "Line legend label", default = "Volume"),
+    list(section = "labels", args = c("y_label", "y_lab", "y_col_label"), id = "column_axis_label", type = "text", label = "Y-axis label", default = ""),
+    list(section = "labels", args = "col_label", id = "column_legend_label", type = "text", label = "Column legend label", default = ""),
+    list(section = "labels", args = "y_line_label", id = "line_axis_label", type = "text", label = "Line axis label", default = ""),
+    list(section = "labels", args = "line_label", id = "line_legend_label", type = "text", label = "Line legend label", default = ""),
     list(section = "labels", args = "labels", id = "legend_labels", type = "mapping", label = "Legend labels", default = ""),
     list(section = "advanced", args = "primary_min_breaks", id = "primary_min_breaks", type = "numeric", label = "Primary min breaks", default = 4, min = 2),
     list(section = "advanced", args = "primary_max_breaks", id = "primary_max_breaks", type = "numeric", label = "Primary max breaks", default = 6, min = 2),
@@ -354,6 +355,7 @@ chart_arg_registry <- function() {
     list(section = "advanced", args = "y_min_breaks", id = "y_min_breaks", type = "numeric", label = "Y min breaks", default = 4, min = 2),
     list(section = "advanced", args = "y_max_breaks", id = "y_max_breaks", type = "numeric", label = "Y max breaks", default = 5, min = 2),
     list(section = "advanced", args = "n_breaks", id = "n_breaks", type = "numeric", label = "Number of y-axis breaks", default = NA_real_, min = 2),
+    list(section = "advanced", args = "x_n_breaks", id = "x_n_breaks", type = "numeric", label = "Number of x-axis breaks", default = NA_real_, min = 2),
     list(section = "advanced", args = "primary_axis", id = "primary_axis", type = "select", label = "Primary axis", default = "line", choices = c("line", "column")),
     list(section = "advanced", args = "x_breaks", id = "x_breaks", type = "text", label = "X breaks", default = ""),
     list(section = "advanced", args = "y_col_accuracy", id = "y_col_accuracy", type = "numeric", label = "Column label accuracy", default = NA_real_, min = 0),
