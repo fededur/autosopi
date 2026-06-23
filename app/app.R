@@ -281,14 +281,89 @@ split_filter_values <- function(value) {
   values[nzchar(values)]
 }
 
+omt_primary_industry_sector_values <- function(sector) {
+  sector_map <- c(
+    "Dairy" = "Dairy",
+    "Meat and Wool" = "Meat and Wool",
+    "Forestry" = "Forestry",
+    "Horticulture" = "Horticulture",
+    "Seafood" = "Seafood",
+    "Arable" = "Arable",
+    "Other foods" = "Other Primary Sector Exports and Foods"
+  )
+
+  if (is.null(sector) || identical(sector, "All sectors")) {
+    return(unname(sector_map))
+  }
+
+  unname(sector_map[[sector]] %||% sector)
+}
+
+default_omt_filter_value <- function(input, column_name) {
+  if (identical(column_name, "Primary Industry Sector")) {
+    return(paste(omt_primary_industry_sector_values(input$sector), collapse = ", "))
+  }
+
+  ""
+}
+
+is_omt_date_filter <- function(table_name, column_name) {
+  identical(as.character(table_name), "Time") ||
+    grepl("date", column_name, ignore.case = TRUE)
+}
+
+parse_omt_filter_date <- function(value) {
+  value <- trimws(as.character(value))
+  if (!nzchar(value)) return(as.Date(NA))
+
+  parsed <- parse_flexible_date(value)
+  if (inherits(parsed, "Date") && !is.na(parsed[[1]])) {
+    return(parsed[[1]])
+  }
+
+  month_year_formats <- c("%d %b %Y", "%d %B %Y", "%Y %b %d", "%Y %B %d")
+  candidates <- c(paste("01", value), paste(value, "01"))
+  for (candidate in candidates) {
+    for (fmt in month_year_formats) {
+      parsed <- as.Date(candidate, format = fmt)
+      if (!is.na(parsed)) return(parsed)
+    }
+  }
+
+  as.Date(NA)
+}
+
+format_omt_filter_values <- function(table_name, column_name, values) {
+  if (is_omt_date_filter(table_name, column_name)) {
+    dates <- do.call(c, lapply(values, parse_omt_filter_date))
+    if (any(is.na(dates))) {
+      stop(
+        "Could not parse date filter value(s) for ", column_name,
+        ". Use dates such as 2026-01-01 or 01/01/2026.",
+        call. = FALSE
+      )
+    }
+
+    return(paste0(
+      "DATE(",
+      format(dates, "%Y"), ",",
+      as.integer(format(dates, "%m")), ",",
+      as.integer(format(dates, "%d")),
+      ")"
+    ))
+  }
+
+  paste0('"', values, '"')
+}
+
 build_omt_filter_expression <- function(table_name, column_name, values) {
   values <- split_filter_values(values)
   if (length(values) == 0) {
     return(NULL)
   }
 
-  quoted_values <- paste0('"', values, '"', collapse = ",")
-  sprintf("'%s'[%s] in {%s}", table_name, column_name, quoted_values)
+  formatted_values <- paste(format_omt_filter_values(table_name, column_name, values), collapse = ",")
+  sprintf("'%s'[%s] in {%s}", table_name, column_name, formatted_values)
 }
 
 collect_omt_filter_args <- function(input) {
@@ -2072,8 +2147,12 @@ server <- function(input, output, session) {
         textInput(
           omt_filter_input_id(column_name),
           paste0("Filter ", column_name),
-          value = "",
-          placeholder = "Example: Seafood, Dairy"
+          value = default_omt_filter_value(input, column_name),
+          placeholder = if (is_omt_date_filter(columns[[column_name]], column_name)) {
+            "Example: 2026-01-01, 2026-02-01"
+          } else {
+            "Example: Seafood, Dairy"
+          }
         )
       })
     )
