@@ -778,11 +778,12 @@ categorical_field_choices <- function(data) {
 
 time_field_choices <- function(data) {
   if (is.null(data)) return(character())
-  fields <- names(data)[vapply(data, function(column) {
+  time_like <- names(data)[vapply(data, function(column) {
     inherits(column, c("Date", "POSIXct", "POSIXlt")) || is.numeric(column) || is.integer(column)
   }, logical(1))]
 
-  if (length(fields) == 0) names(data) else fields
+  period_like <- names(data)[grepl("date|time|year|period|quarter|month|season", names(data), ignore.case = TRUE)]
+  unique(c(time_like, period_like, names(data)))
 }
 
 transform_field_input <- function(function_name, arg, id, data = NULL) {

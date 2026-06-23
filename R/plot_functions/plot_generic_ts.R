@@ -252,6 +252,7 @@ plot_generic_ts <- function(
   group_vals <- unique(as.character(df[[group_name]]))
   
   is_date <- inherits(df[[x_name]], c("Date", "POSIXct", "POSIXlt"))
+  is_discrete_x <- !is_date && !is.numeric(df[[x_name]]) && !is.integer(df[[x_name]])
 
   parse_x_break_values <- function(breaks, is_date) {
     if (is.null(breaks) || length(breaks) == 0) return(NULL)
@@ -307,6 +308,12 @@ plot_generic_ts <- function(
     if (is_date) {
       breaks <- pretty(x_values, n = n)
       return(as.Date(breaks))
+    }
+
+    if (!is.numeric(x_values) && !is.integer(x_values)) {
+      values <- unique(as.character(x_values))
+      indexes <- unique(round(seq(1, length(values), length.out = min(n, length(values)))))
+      return(values[indexes])
     }
 
     pretty(range(x_values, na.rm = TRUE), n = n)
@@ -862,7 +869,7 @@ plot_generic_ts <- function(
       }
     }
     
-  } else {
+  } else if (!is_discrete_x) {
     p <- p +
       ggplot2::scale_x_continuous(
         name = x_label,
@@ -873,6 +880,21 @@ plot_generic_ts <- function(
         } else {
           sort(unique(df[[x_name]]))
         },
+        expand = c(0, expand_x)
+      )
+  } else {
+    discrete_breaks <- if (!is.null(x_breaks)) {
+      as.character(x_breaks)
+    } else if (!is.null(x_n_break_values)) {
+      as.character(x_n_break_values)
+    } else {
+      ggplot2::waiver()
+    }
+
+    p <- p +
+      ggplot2::scale_x_discrete(
+        name = x_label,
+        breaks = discrete_breaks,
         expand = c(0, expand_x)
       )
   }
