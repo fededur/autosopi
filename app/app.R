@@ -740,6 +740,10 @@ function_extra_args <- function(function_name, exclude) {
 
 formal_default_text <- function(function_name, arg_name) {
   default <- formals(get(function_name, mode = "function"))[[arg_name]]
+
+  if (rlang::is_missing(default)) {
+    return("")
+  }
   
   if (is.symbol(default) && identical(as.character(default), "")) {
     return("")
@@ -764,7 +768,45 @@ formal_default_text <- function(function_name, arg_name) {
   ""
 }
 
-function_argument_inputs <- function(function_name, prefix, exclude) {
+categorical_field_choices <- function(data) {
+  if (is.null(data)) return(character())
+  fields <- names(data)[vapply(data, function(column) {
+    is.character(column) || is.factor(column) || is.logical(column)
+  }, logical(1))]
+  fields
+}
+
+time_field_choices <- function(data) {
+  if (is.null(data)) return(character())
+  fields <- names(data)[vapply(data, function(column) {
+    inherits(column, c("Date", "POSIXct", "POSIXlt")) || is.numeric(column) || is.integer(column)
+  }, logical(1))]
+
+  if (length(fields) == 0) names(data) else fields
+}
+
+transform_field_input <- function(function_name, arg, id, data = NULL) {
+  if (!grepl("^transform_.*_data$", function_name)) {
+    return(NULL)
+  }
+
+  if (identical(arg, "group")) {
+    choices <- categorical_field_choices(data)
+    if (length(choices) == 0 && !is.null(data)) choices <- names(data)
+    selected <- if (length(choices) > 0) choices[[1]] else ""
+    return(selectInput(id, "Group/category column", choices = choices, selected = selected))
+  }
+
+  if (identical(arg, "time_var")) {
+    choices <- time_field_choices(data)
+    selected <- if (length(choices) > 0) choices[[1]] else ""
+    return(selectInput(id, "Time column", choices = choices, selected = selected))
+  }
+
+  NULL
+}
+
+function_argument_inputs <- function(function_name, prefix, exclude, data = NULL) {
   args <- function_extra_args(function_name, exclude)
   
   if (length(args) == 0) {
@@ -776,8 +818,11 @@ function_argument_inputs <- function(function_name, prefix, exclude) {
     id <- safe_input_id(prefix, arg)
     label <- data_arg_label(function_name, arg)
     note <- data_arg_note(function_name, arg)
+    field_input <- transform_field_input(function_name, arg, id, data)
 
-    if (is_omt_list_arg(function_name, arg)) {
+    if (!is.null(field_input)) {
+      field_input
+    } else if (is_omt_list_arg(function_name, arg)) {
       tagList(
         textAreaInput(
           id,
@@ -2241,9 +2286,14 @@ server <- function(input, output, session) {
       return(tags$p(class = "sopi-note", "No transform will be applied."))
     }
 
+    data <- tryCatch(source_data(), error = function(e) NULL)
+
     tagList(
       tags$h4("Transform arguments"),
-      function_argument_inputs(transform_function, "transform_arg", transform_standard_exclusions())
+      if (is.null(data)) {
+        tags$p(class = "sopi-note", "Load data first to choose transform columns.")
+      },
+      function_argument_inputs(transform_function, "transform_arg", transform_standard_exclusions(), data = data)
     )
   })
 
@@ -2275,8 +2325,12 @@ server <- function(input, output, session) {
     )
   })
   
-  loaded_data <- eventReactive(input$load_data, {
-    build_data(input)
+  source_data <- eventReactive(input$load_data, {
+    build_source_data(input)
+  })
+
+  loaded_data <- reactive({
+    build_transformed_data(input, source_data())
   })
   
   output$data_status <- renderPrint({

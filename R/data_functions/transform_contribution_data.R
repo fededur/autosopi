@@ -41,8 +41,8 @@ transform_contribution_data <- function(
       .data[[time_var]] == max(.data[[time_var]]),
       !is.na(revenue_lag)
     ) %>%
-    select(
-      category = all_of(group),
+    transmute(
+      category = .data[[group]],
       total_pp,
       price_pp,
       quantity_pp
