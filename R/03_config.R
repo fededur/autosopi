@@ -3,6 +3,13 @@ read_config_sheet <- function(path, sheet) {
     dplyr::mutate(dplyr::across(dplyr::where(is.character), empty_to_na))
 }
 
+empty_config_sheet <- function(columns) {
+  stats::setNames(
+    as.data.frame(rep(list(character()), length(columns)), stringsAsFactors = FALSE),
+    columns
+  )
+}
+
 read_chart_config <- function(path) {
   sheets <- readxl::excel_sheets(path)
   required <- c(
@@ -50,6 +57,18 @@ read_chart_config <- function(path) {
 
   if (!"release_settings" %in% names(config)) {
     config$release_settings <- config[[settings_sheet]]
+  }
+
+  if ("data_transforms" %in% sheets) {
+    config$data_transforms <- read_config_sheet(path, "data_transforms")
+  } else {
+    config$data_transforms <- empty_config_sheet(c("data_source_id", "active", "transform_function", "notes"))
+  }
+
+  if ("transform_args" %in% sheets) {
+    config$transform_args <- read_config_sheet(path, "transform_args")
+  } else {
+    config$transform_args <- empty_config_sheet(c("data_source_id", "arg_name", "arg_value", "arg_type", "notes"))
   }
 
   validate_config(config)
@@ -122,6 +141,11 @@ resolve_job_settings <- function(job, config) {
     dplyr::filter(.data$data_source_id == job$data_source_id) |>
     dplyr::slice(1)
 
+  transform_row <- config$data_transforms |>
+    dplyr::filter(.data$data_source_id == job$data_source_id) |>
+    dplyr::filter(.data$active %in% c(TRUE, "TRUE", "true", "Yes", "yes", 1)) |>
+    dplyr::slice(1)
+
   data_args <- merge_args(
     global,
     sector,
@@ -135,15 +159,24 @@ resolve_job_settings <- function(job, config) {
     args_from_table(config$plot_args, "plot_id", job$plot_id)
   )
 
+  transform_args <- merge_args(
+    global,
+    sector,
+    args_from_table(config$transform_args, "data_source_id", job$data_source_id)
+  )
+
   plot_args <- apply_release_plot_aliases(plot_args)
   data_args <- apply_release_data_aliases(data_args)
+  transform_args <- apply_release_data_aliases(transform_args)
 
   list(
     global = global,
     sector = sector,
     plot = plot_row,
     data_source = source_row,
+    data_transform = transform_row,
     data_args = data_args,
+    transform_args = transform_args,
     plot_args = plot_args
   )
 }

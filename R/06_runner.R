@@ -18,6 +18,8 @@ run_charts <- function(run_plan, config, project_root) {
       data <- get_plot_data(
         data_source = resolved$data_source,
         data_args = resolved$data_args,
+        data_transform = resolved$data_transform,
+        transform_args = resolved$transform_args,
         project_root = project_root
       )
 

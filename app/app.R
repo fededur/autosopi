@@ -147,6 +147,23 @@ data_function_names <- data_function_names[
   vapply(data_function_names, is_user_facing_data_function, logical(1))
 ]
 
+transform_function_names <- list_r_function_names(
+  file.path(project_root, "R", "data_functions"),
+  include_plot_aliases = FALSE
+)
+
+is_user_facing_transform_function <- function(function_name) {
+  if (!grepl("^transform_.*_data$", function_name)) return(FALSE)
+  if (!exists(function_name, mode = "function")) return(FALSE)
+
+  fn_args <- names(formals(get(function_name, mode = "function")))
+  length(fn_args) > 0 && identical(fn_args[[1]], "data")
+}
+
+transform_function_names <- transform_function_names[
+  vapply(transform_function_names, is_user_facing_transform_function, logical(1))
+]
+
 parse_extra_args <- function(text) {
   if (is.null(text) || !nzchar(trimws(text))) return(list())
   
@@ -177,6 +194,17 @@ parse_guess <- function(value) {
   
   numeric_value <- suppressWarnings(as.numeric(value))
   if (!is.na(numeric_value) && grepl("^-?[0-9.]+$", value)) return(numeric_value)
+
+  if (grepl(",", value, fixed = TRUE)) {
+    values <- trimws(strsplit(value, ",", fixed = TRUE)[[1]])
+    values <- values[nzchar(values)]
+    numeric_values <- suppressWarnings(as.numeric(values))
+    if (length(values) > 0 && all(!is.na(numeric_values))) {
+      return(numeric_values)
+    }
+
+    return(values)
+  }
   
   value
 }
@@ -1096,6 +1124,7 @@ config_value_type <- function(value) {
   if (is.character(value) && !is.null(names(value)) && any(nzchar(names(value)))) {
     return("named_character_vector")
   }
+  if (is.character(value) && length(value) > 1) return("character_vector")
   if (is.numeric(value) && length(value) == 1 && !is.na(value) && value == as.integer(value)) return("integer")
   if (is.numeric(value)) return("numeric")
   "character"
@@ -1236,6 +1265,31 @@ build_data_args_config <- function(input, data_source_id) {
   args_to_config_rows("data_source_id", data_source_id, args, "Created from Shiny app")
 }
 
+build_data_transform_config <- function(input, data_source_id) {
+  transform_function <- input$transform_function
+  active <- !is.null(transform_function) &&
+    !is_blank(transform_function) &&
+    !identical(transform_function, "none")
+
+  data.frame(
+    data_source_id = data_source_id,
+    active = ifelse(active, "TRUE", "FALSE"),
+    transform_function = if (active) transform_function else NA_character_,
+    notes = if (active) "Created from Shiny app" else "No transform",
+    stringsAsFactors = FALSE
+  )
+}
+
+build_transform_args_config <- function(input, data_source_id) {
+  transform_function <- input$transform_function
+  if (is.null(transform_function) || is_blank(transform_function) || identical(transform_function, "none")) {
+    return(empty_config_table(c("data_source_id", "arg_name", "arg_value", "arg_type", "notes")))
+  }
+
+  args <- collect_function_arguments(input, transform_function, "transform_arg", transform_standard_exclusions())
+  args_to_config_rows("data_source_id", data_source_id, args, "Created from Shiny app")
+}
+
 build_plot_config <- function(input, plot_id, data_source_id, existing_plots) {
   existing_plot <- existing_plots[existing_plots$plot_id == plot_id, , drop = FALSE]
   sort_order <- if (nrow(existing_plot) > 0 && !is_blank(existing_plot$sort_order[[1]])) {
@@ -1339,6 +1393,8 @@ write_release_config_from_app <- function(input, project_root, plot_id, data_sou
     plot_args = c("plot_id", "arg_name", "arg_value", "arg_type", "notes"),
     data_sources = c("data_source_id", "source_type", "source_ref", "sheet", "range", "data_function", "cache", "notes"),
     data_args = c("data_source_id", "arg_name", "arg_value", "arg_type", "notes"),
+    data_transforms = c("data_source_id", "active", "transform_function", "notes"),
+    transform_args = c("data_source_id", "arg_name", "arg_value", "arg_type", "notes"),
     run_control = c("setting_name", "setting_value", "setting_type", "notes"),
     palettes = c("palette", "item", "hex", "notes")
   )
@@ -1363,6 +1419,18 @@ write_release_config_from_app <- function(input, project_root, plot_id, data_sou
   tables$data_args <- upsert_rows(
     tables$data_args,
     build_data_args_config(input, data_source_id),
+    "data_source_id",
+    data_source_id
+  )
+  tables$data_transforms <- upsert_rows(
+    tables$data_transforms,
+    build_data_transform_config(input, data_source_id),
+    "data_source_id",
+    data_source_id
+  )
+  tables$transform_args <- upsert_rows(
+    tables$transform_args,
+    build_transform_args_config(input, data_source_id),
     "data_source_id",
     data_source_id
   )
@@ -1424,7 +1492,7 @@ first_matching_field <- function(fields, pattern) {
   if (length(matches) == 0) "" else matches[[1]]
 }
 
-build_data <- function(input) {
+build_source_data <- function(input) {
   if (identical(input$data_source_type, "function")) {
     args <- merge_args(
       project_args(input),
@@ -1447,6 +1515,22 @@ build_data <- function(input) {
       readxl::read_excel(path, sheet = input$excel_sheet, range = input$excel_range)
     }
   }
+}
+
+build_transformed_data <- function(input, data) {
+  transform_function <- input$transform_function
+  if (is.null(transform_function) || is_blank(transform_function) || identical(transform_function, "none")) {
+    return(data)
+  }
+
+  args <- collect_function_arguments(input, transform_function, "transform_arg", transform_standard_exclusions())
+  args$data <- data
+
+  call_named_function(transform_function, args)
+}
+
+build_data <- function(input) {
+  build_transformed_data(input, build_source_data(input))
 }
 
 build_plot <- function(input, data) {
@@ -1500,6 +1584,13 @@ build_plot <- function(input, data) {
 data_standard_exclusions <- function() {
   c(
     "sector",
+    "project_root"
+  )
+}
+
+transform_standard_exclusions <- function() {
+  c(
+    "data",
     "project_root"
   )
 }
@@ -1600,6 +1691,7 @@ ui <- fluidPage(
         column(
           4,
           wellPanel(
+            h4("Load"),
             radioButtons("data_source_type", "Data source", choices = c("R function" = "function", "Excel sheet" = "excel")),
             conditionalPanel(
               "input.data_source_type == 'function'",
@@ -1622,7 +1714,20 @@ ui <- fluidPage(
           )
         ),
         column(
-          8,
+          4,
+          wellPanel(
+            h4("Transform"),
+            selectInput(
+              "transform_function",
+              "Transform function",
+              choices = c("None" = "none", transform_function_names),
+              selected = "none"
+            ),
+            uiOutput("transform_function_args")
+          )
+        ),
+        column(
+          4,
           wellPanel(
             h4("Data preview"),
             verbatimTextOutput("data_status"),
@@ -2127,6 +2232,18 @@ server <- function(input, output, session) {
       tags$h4("Function arguments"),
       function_argument_inputs(input$data_function, "data_arg", data_standard_exclusions()),
       uiOutput("omt_filter_controls")
+    )
+  })
+
+  output$transform_function_args <- renderUI({
+    transform_function <- input$transform_function
+    if (is.null(transform_function) || identical(transform_function, "none")) {
+      return(tags$p(class = "sopi-note", "No transform will be applied."))
+    }
+
+    tagList(
+      tags$h4("Transform arguments"),
+      function_argument_inputs(transform_function, "transform_arg", transform_standard_exclusions())
     )
   })
 

@@ -1,7 +1,7 @@
-get_plot_data <- function(data_source, data_args, project_root) {
+get_plot_data <- function(data_source, data_args, project_root, data_transform = NULL, transform_args = list()) {
   source_type <- data_source$source_type[[1]]
 
-  if (identical(source_type, "excel")) {
+  data <- if (identical(source_type, "excel")) {
     read_excel_data(data_source, project_root, data_args)
   } else if (identical(source_type, "function")) {
     data_function <- data_source$data_function[[1]]
@@ -10,6 +10,23 @@ get_plot_data <- function(data_source, data_args, project_root) {
   } else {
     stop("Unsupported source_type: ", source_type, call. = FALSE)
   }
+
+  apply_data_transform(data, data_transform, transform_args, project_root)
+}
+
+apply_data_transform <- function(data, data_transform = NULL, transform_args = list(), project_root = NULL) {
+  if (is.null(data_transform) || nrow(data_transform) == 0) {
+    return(data)
+  }
+
+  transform_function <- data_transform$transform_function[[1]]
+  if (is_blank(transform_function)) {
+    return(data)
+  }
+
+  transform_args$data <- data
+  transform_args$project_root <- project_root
+  call_named_function(transform_function, transform_args)
 }
 
 read_excel_data <- function(data_source, project_root, context = list()) {
