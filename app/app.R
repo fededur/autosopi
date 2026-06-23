@@ -335,14 +335,13 @@ default_omt_filter_value <- function(input, column_name) {
   ""
 }
 
-is_omt_date_filter <- function(table_name, column_name) {
-  identical(as.character(table_name), "Time") ||
-    grepl("date", column_name, ignore.case = TRUE)
-}
-
 parse_omt_filter_date <- function(value) {
   value <- trimws(as.character(value))
   if (!nzchar(value)) return(as.Date(NA))
+
+  if (!grepl("[-/. ]", value)) {
+    return(as.Date(NA))
+  }
 
   parsed <- parse_flexible_date(value)
   if (inherits(parsed, "Date") && !is.na(parsed[[1]])) {
@@ -361,27 +360,30 @@ parse_omt_filter_date <- function(value) {
   as.Date(NA)
 }
 
-format_omt_filter_values <- function(table_name, column_name, values) {
-  if (is_omt_date_filter(table_name, column_name)) {
-    dates <- do.call(c, lapply(values, parse_omt_filter_date))
-    if (any(is.na(dates))) {
-      stop(
-        "Could not parse date filter value(s) for ", column_name,
-        ". Use dates such as 2026-01-01 or 01/01/2026.",
-        call. = FALSE
-      )
-    }
+format_omt_filter_value <- function(value) {
+  value <- trimws(as.character(value))
+  parsed_date <- parse_omt_filter_date(value)
 
+  if (!is.na(parsed_date)) {
     return(paste0(
       "DATE(",
-      format(dates, "%Y"), ",",
-      as.integer(format(dates, "%m")), ",",
-      as.integer(format(dates, "%d")),
+      format(parsed_date, "%Y"), ",",
+      as.integer(format(parsed_date, "%m")), ",",
+      as.integer(format(parsed_date, "%d")),
       ")"
     ))
   }
 
-  paste0('"', values, '"')
+  numeric_value <- suppressWarnings(as.numeric(value))
+  if (!is.na(numeric_value) && grepl("^-?[0-9]+(\\.[0-9]+)?$", value)) {
+    return(as.character(numeric_value))
+  }
+
+  paste0('"', value, '"')
+}
+
+format_omt_filter_values <- function(table_name, column_name, values) {
+  vapply(values, format_omt_filter_value, character(1))
 }
 
 build_omt_filter_expression <- function(table_name, column_name, values) {
@@ -2316,11 +2318,7 @@ server <- function(input, output, session) {
           omt_filter_input_id(column_name),
           paste0("Filter ", column_name),
           value = default_omt_filter_value(input, column_name),
-          placeholder = if (is_omt_date_filter(columns[[column_name]], column_name)) {
-            "Example: 2026-01-01, 2026-02-01"
-          } else {
-            "Example: Seafood, Dairy"
-          }
+          placeholder = "Examples: Seafood, 2025, 2024/25, 2026-01-01"
         )
       })
     )
