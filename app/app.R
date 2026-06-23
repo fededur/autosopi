@@ -19,21 +19,21 @@ find_project_root <- function(start = getwd()) {
   if (file.exists(current) && !dir.exists(current)) {
     current <- dirname(current)
   }
-
+  
   repeat {
     if (
       file.exists(file.path(current, "run_charts.R")) &&
-        dir.exists(file.path(current, "R", "plot_functions")) &&
-        dir.exists(file.path(current, "R", "data_functions"))
+      dir.exists(file.path(current, "R", "plot_functions")) &&
+      dir.exists(file.path(current, "R", "data_functions"))
     ) {
       return(current)
     }
-
+    
     parent <- dirname(current)
     if (identical(parent, current)) break
     current <- parent
   }
-
+  
   normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 }
 
@@ -52,8 +52,8 @@ source_directory(file.path(project_root, "R", "data_functions"))
 source_directory(file.path(project_root, "R", "plot_functions"))
 
 sopi_sectors <- c(
-  "All sectors",
   "Macro",
+  "All sectors",
   "Dairy",
   "Meat and Wool",
   "Forestry",
@@ -66,11 +66,11 @@ sopi_sectors <- c(
 list_r_function_names <- function(path, include_plot_aliases = FALSE) {
   files <- list.files(path, pattern = "\\.R$", full.names = TRUE)
   names <- character()
-
+  
   for (file in files) {
     lines <- readLines(file, warn = FALSE)
     top_level <- lines[!grepl("^\\s", lines)]
-
+    
     function_defs <- sub(
       "^([A-Za-z.][A-Za-z0-9._]*)\\s*(<-|=)\\s*function\\s*\\(.*$",
       "\\1",
@@ -80,9 +80,9 @@ list_r_function_names <- function(path, include_plot_aliases = FALSE) {
         value = TRUE
       )
     )
-
+    
     names <- c(names, function_defs)
-
+    
     if (include_plot_aliases) {
       aliases <- sub(
         "^(plot[A-Za-z0-9._]*|[A-Za-z0-9._]*_plot)\\s*(<-|=)\\s*([A-Za-z.][A-Za-z0-9._]*)\\s*$",
@@ -96,7 +96,7 @@ list_r_function_names <- function(path, include_plot_aliases = FALSE) {
       names <- c(names, aliases)
     }
   }
-
+  
   sort(unique(names[nzchar(names)]))
 }
 
@@ -117,67 +117,67 @@ data_function_names <- data_function_names[vapply(data_function_names, function(
 
 parse_extra_args <- function(text) {
   if (is.null(text) || !nzchar(trimws(text))) return(list())
-
+  
   lines <- trimws(strsplit(text, "\n", fixed = TRUE)[[1]])
   lines <- lines[nzchar(lines) & !startsWith(lines, "#")]
-
+  
   args <- list()
   for (line in lines) {
     parts <- strsplit(line, "=", fixed = TRUE)[[1]]
     if (length(parts) < 2) next
-
+    
     key <- trimws(parts[[1]])
     value <- trimws(paste(parts[-1], collapse = "="))
     if (!nzchar(key)) next
-
+    
     args[[key]] <- parse_guess(value)
   }
-
+  
   args
 }
 
 parse_guess <- function(value) {
   if (!nzchar(value)) return(NULL)
   lower <- tolower(value)
-
+  
   if (lower %in% c("true", "t", "yes", "y")) return(TRUE)
   if (lower %in% c("false", "f", "no", "n")) return(FALSE)
-
+  
   numeric_value <- suppressWarnings(as.numeric(value))
   if (!is.na(numeric_value) && grepl("^-?[0-9.]+$", value)) return(numeric_value)
-
+  
   value
 }
 
 parse_named_mapping_text <- function(text) {
   if (is.null(text) || !nzchar(trimws(text))) return(NULL)
-
+  
   lines <- trimws(strsplit(text, "\n", fixed = TRUE)[[1]])
   lines <- lines[nzchar(lines) & !startsWith(lines, "#")]
-
+  
   keys <- character()
   values <- character()
-
+  
   for (line in lines) {
     parts <- if (grepl("=", line, fixed = TRUE)) {
       strsplit(line, "=", fixed = TRUE)[[1]]
     } else {
       strsplit(line, ",", fixed = TRUE)[[1]]
     }
-
+    
     if (length(parts) < 2) next
-
+    
     key <- trimws(parts[[1]])
     value <- trimws(paste(parts[-1], collapse = if (grepl("=", line, fixed = TRUE)) "=" else ","))
-
+    
     if (!nzchar(key) || !nzchar(value)) next
-
+    
     keys <- c(keys, key)
     values <- c(values, value)
   }
-
+  
   if (length(keys) == 0) return(NULL)
-
+  
   mapping <- stats::setNames(values, keys)
   mapping[!duplicated(names(mapping))]
 }
@@ -188,36 +188,36 @@ is_hex_colour <- function(value) {
 
 parse_custom_palette_text <- function(text) {
   if (is.null(text) || !nzchar(trimws(text))) return(character())
-
+  
   lines <- trimws(strsplit(text, "\n", fixed = TRUE)[[1]])
   lines <- lines[nzchar(lines) & !startsWith(lines, "#")]
-
+  
   items <- character()
   colours <- character()
-
+  
   for (line in lines) {
     parts <- if (grepl("=", line, fixed = TRUE)) {
       strsplit(line, "=", fixed = TRUE)[[1]]
     } else {
       strsplit(line, ",", fixed = TRUE)[[1]]
     }
-
+    
     if (length(parts) < 2) next
-
+    
     item <- trimws(parts[[1]])
     colour <- trimws(paste(parts[-1], collapse = if (grepl("=", line, fixed = TRUE)) "=" else ","))
-
+    
     if (!nzchar(item) || !nzchar(colour)) next
     if (!is_hex_colour(colour)) {
       stop("Invalid hex colour for '", item, "': ", colour, call. = FALSE)
     }
-
+    
     items <- c(items, item)
     colours <- c(colours, colour)
   }
-
+  
   if (length(items) == 0) return(character())
-
+  
   palette <- stats::setNames(colours, items)
   palette[!duplicated(names(palette))]
 }
@@ -234,29 +234,29 @@ monthly_descriptive_palette <- function(
     average_colour = "#3D3D3D",
     range_colour = "#dbdcde") {
   if (length(categories) == 0) return(character())
-
+  
   season_categories <- categories[-seq_len(min(2, length(categories)))]
   sector_style <- style_from_metadata(
     metadata_resource = metadata_resource,
     sector = sector
   )
-
+  
   sector_colours <- unname(sector_style$palette)
   sector_colours <- sector_colours[!is.na(sector_colours) & nzchar(sector_colours)]
-
+  
   if (length(sector_colours) < length(season_categories)) {
     sector_colours <- c(
       sector_colours,
       scales::hue_pal()(length(season_categories) - length(sector_colours))
     )
   }
-
+  
   palette <- c(
     average_colour,
     range_colour,
     sector_colours[seq_along(season_categories)]
   )
-
+  
   stats::setNames(palette[seq_along(categories)], categories)
 }
 
@@ -264,14 +264,14 @@ palette_choices_from_metadata <- function(metadata_resource) {
   if (is.null(metadata_resource) || is.null(metadata_resource$custom_palettes)) {
     return(character())
   }
-
+  
   palettes <- unique(metadata_resource$custom_palettes$palette)
   sort(palettes[!is.na(palettes) & nzchar(palettes)])
 }
 
 selected_palette_name <- function(input) {
   mode <- input$palette_mode %||% "metadata"
-
+  
   if (identical(mode, "saved")) {
     name <- input$saved_palette
   } else if (identical(mode, "custom")) {
@@ -279,7 +279,7 @@ selected_palette_name <- function(input) {
   } else {
     name <- NULL
   }
-
+  
   if (is.null(name) || !nzchar(trimws(name))) NULL else trimws(name)
 }
 
@@ -288,40 +288,40 @@ effective_palette_name <- function(input, plot_id = NULL) {
   if (!is.null(palette_name)) {
     return(palette_name)
   }
-
+  
   if (identical(input$plot_function, "plot_monthly_descriptive") && !is.null(plot_id)) {
     return(paste0(plot_id, "_palette"))
   }
-
+  
   NULL
 }
 
 custom_palette_for_preview <- function(input, data = NULL) {
   mode <- input$palette_mode %||% "metadata"
-
+  
   if (identical(mode, "custom")) {
     palette <- parse_custom_palette_text(input$custom_palette_text)
     if (length(palette) == 0) return(NULL)
     return(palette)
   }
-
+  
   if (identical(mode, "saved")) {
     return(selected_palette_name(input))
   }
-
+  
   NULL
 }
 
 add_palette_args_for_function <- function(args, palette, function_name) {
   if (is.null(palette)) return(args)
-
+  
   fn_formals <- names(formals(get(function_name, mode = "function")))
   palette_args <- intersect(sopi_palette_arg_names(include_aliases = TRUE), fn_formals)
-
+  
   for (arg_name in palette_args) {
     args[[arg_name]] <- palette
   }
-
+  
   args
 }
 
@@ -372,35 +372,35 @@ chart_arg_registry <- function() {
 
 chart_registry_entries <- function(function_name, section = NULL) {
   if (!exists(function_name, mode = "function")) return(list())
-
+  
   fn_args <- names(formals(get(function_name, mode = "function")))
   entries <- Filter(function(entry) any(entry$args %in% fn_args), chart_arg_registry())
   entries <- entries[!duplicated(vapply(entries, function(entry) entry$id, character(1)))]
-
+  
   if (!is.null(section)) {
     entries <- Filter(function(entry) identical(entry$section, section), entries)
   }
-
+  
   entries
 }
 
 chart_entry_label <- function(entry, function_name) {
   fn_args <- names(formals(get(function_name, mode = "function")))
-
+  
   if (identical(entry$id, "column_value") && "y_col" %in% fn_args) {
     return("Column/bar value")
   }
-
+  
   if (identical(entry$id, "column_axis_label") && "y_col_label" %in% fn_args) {
     return("Column axis label")
   }
-
+  
   entry$label
 }
 
 render_chart_registry_entry <- function(entry, function_name, data = NULL) {
   label <- chart_entry_label(entry, function_name)
-
+  
   if (identical(entry$type, "field")) {
     fields <- field_choices(data)
     choices <- if (isTRUE(entry$optional)) optional_choices(data) else fields
@@ -413,26 +413,26 @@ render_chart_registry_entry <- function(entry, function_name, data = NULL) {
     } else {
       ""
     }
-
+    
     if (!isTRUE(entry$optional) && is_blank(selected) && length(fields) > 0) {
       selected <- fields[[1]]
     }
-
+    
     return(selectInput(entry$id, label, choices = choices, selected = selected))
   }
-
+  
   if (identical(entry$type, "select")) {
     return(selectInput(entry$id, label, choices = entry$choices, selected = entry$default))
   }
-
+  
   if (identical(entry$type, "checkbox")) {
     return(checkboxInput(entry$id, label, value = isTRUE(entry$default)))
   }
-
+  
   if (identical(entry$type, "numeric")) {
     return(numericInput(entry$id, label, value = entry$default, min = entry$min %||% NA))
   }
-
+  
   if (identical(entry$type, "mapping")) {
     return(tagList(
       textAreaInput(
@@ -445,99 +445,99 @@ render_chart_registry_entry <- function(entry, function_name, data = NULL) {
       tags$p(class = "sopi-note", "Optional. Use one label mapping per line: raw value = display label.")
     ))
   }
-
+  
   textInput(entry$id, label, value = entry$default %||% "")
 }
 
 render_chart_registry_section <- function(function_name, section, data = NULL, empty_message = NULL) {
   entries <- chart_registry_entries(function_name, section)
-
+  
   if (length(entries) == 0) {
     return(tags$p(class = "sopi-note", empty_message %||% "No controls are needed for this plot function."))
   }
-
+  
   do.call(tagList, lapply(entries, render_chart_registry_entry, function_name = function_name, data = data))
 }
 
 collect_chart_registry_args <- function(input, function_name) {
   if (!exists(function_name, mode = "function")) return(list())
-
+  
   fn_args <- names(formals(get(function_name, mode = "function")))
   args <- list()
-
+  
   for (entry in chart_registry_entries(function_name)) {
     value <- input[[entry$id]]
     if (is.null(value)) next
-
+    
     if (identical(entry$type, "field") && isTRUE(entry$optional) && is_blank(value)) {
       next
     }
-
+    
     if (identical(entry$type, "text") && is_blank(value)) {
       next
     }
-
+    
     if (identical(entry$type, "numeric") && (length(value) == 0 || is.na(value))) {
       next
     }
-
+    
     if (identical(entry$type, "mapping")) {
       value <- parse_named_mapping_text(value)
       if (is.null(value) || length(value) == 0) next
     }
-
+    
     for (arg_name in intersect(entry$args, fn_args)) {
       args[[arg_name]] <- value
     }
   }
-
+  
   args
 }
 
 function_extra_args <- function(function_name, exclude) {
   if (!exists(function_name, mode = "function")) return(character())
-
+  
   args <- names(formals(get(function_name, mode = "function")))
   setdiff(args, c(exclude, "..."))
 }
 
 formal_default_text <- function(function_name, arg_name) {
   default <- formals(get(function_name, mode = "function"))[[arg_name]]
-
+  
   if (is.symbol(default) && identical(as.character(default), "")) {
     return("")
   }
-
+  
   if (is.null(default)) {
     return("")
   }
-
+  
   if (is.character(default) && length(default) == 1) {
     return(default)
   }
-
+  
   if (is.numeric(default) && length(default) == 1) {
     return(default)
   }
-
+  
   if (is.logical(default) && length(default) == 1) {
     return(default)
   }
-
+  
   ""
 }
 
 function_argument_inputs <- function(function_name, prefix, exclude) {
   args <- function_extra_args(function_name, exclude)
-
+  
   if (length(args) == 0) {
     return(tags$p(class = "sopi-note", "No extra arguments detected for this function."))
   }
-
+  
   tagList(lapply(args, function(arg) {
     default <- formal_default_text(function_name, arg)
     id <- safe_input_id(prefix, arg)
-
+    
     if (is.logical(default)) {
       checkboxInput(id, arg, value = default)
     } else if (is.numeric(default)) {
@@ -551,17 +551,17 @@ function_argument_inputs <- function(function_name, prefix, exclude) {
 collect_function_arguments <- function(input, function_name, prefix, exclude) {
   args <- function_extra_args(function_name, exclude)
   values <- list()
-
+  
   for (arg in args) {
     id <- safe_input_id(prefix, arg)
     value <- input[[id]]
-
+    
     if (is.null(value)) next
     if (is.character(value) && !nzchar(trimws(value))) next
-
+    
     values[[arg]] <- if (is.character(value)) parse_guess(value) else value
   }
-
+  
   values
 }
 
@@ -594,7 +594,7 @@ forecast_year_defaults <- function(release_year, release_round) {
   if (length(release_year) == 0 || is.na(release_year)) {
     return(list(start = NA_integer_, end = NA_integer_))
   }
-
+  
   release_round <- tolower(trimws(as.character(release_round)))
   if (identical(release_round, "december")) {
     start_year <- release_year + 1L
@@ -603,7 +603,7 @@ forecast_year_defaults <- function(release_year, release_round) {
     start_year <- release_year
     end_year <- start_year + 4L
   }
-
+  
   list(start = start_year, end = end_year)
 }
 
@@ -632,12 +632,12 @@ default_releases_root <- function(project_root) {
   if (nzchar(trimws(env_root))) {
     return(normalizePath(env_root, winslash = "/", mustWork = FALSE))
   }
-
+  
   user_profile <- Sys.getenv("USERPROFILE", unset = "")
   if (nzchar(trimws(user_profile))) {
     return(normalizePath(file.path(user_profile, "Documents", "outputs", "SOPI_releases"), winslash = "/", mustWork = FALSE))
   }
-
+  
   normalizePath(file.path(project_root, "SOPI_releases"), winslash = "/", mustWork = FALSE)
 }
 
@@ -665,9 +665,9 @@ resolve_output_base_path <- function(project_root, path) {
   if (is.null(path) || !nzchar(trimws(path))) {
     return(normalizePath(file.path(project_root, "outputs"), winslash = "/", mustWork = FALSE))
   }
-
+  
   path <- trimws(path)
-
+  
   if (is_absolute_path(path)) {
     normalizePath(path, winslash = "/", mustWork = FALSE)
   } else {
@@ -687,24 +687,24 @@ path_context_from_input <- function(input) {
 
 render_app_path_template <- function(template, input) {
   if (is.null(template) || !nzchar(trimws(template))) return("")
-
+  
   rendered <- trimws(template)
   context <- path_context_from_input(input)
-
+  
   for (name in names(context)) {
     rendered <- gsub(paste0("\\{", name, "\\}"), as.character(context[[name]]), rendered)
   }
-
+  
   rendered
 }
 
 resolve_release_path <- function(project_root, releases_root, relative_template, input) {
   rendered <- render_app_path_template(relative_template, input)
-
+  
   if (is_absolute_path(rendered)) {
     return(normalizePath(rendered, winslash = "/", mustWork = FALSE))
   }
-
+  
   releases_root <- resolve_output_base_path(project_root, releases_root)
   normalizePath(file.path(releases_root, rendered), winslash = "/", mustWork = FALSE)
 }
@@ -713,12 +713,12 @@ portable_release_path <- function(relative_template) {
   if (is.null(relative_template) || !nzchar(trimws(relative_template))) {
     return("{SOPI_RELEASES_ROOT}")
   }
-
+  
   relative_template <- trimws(relative_template)
   if (grepl("^\\{SOPI_RELEASES_ROOT\\}", relative_template)) {
     return(relative_template)
   }
-
+  
   paste0("{SOPI_RELEASES_ROOT}/", gsub("^[/\\\\]+", "", relative_template))
 }
 
@@ -739,7 +739,7 @@ selected_excel_path <- function(input, project_root) {
       input = input
     ))
   }
-
+  
   path <- input$excel_path
   if (is.null(path) || !nzchar(trimws(path))) return(path)
   if (is_absolute_path(path)) {
@@ -765,10 +765,10 @@ list_output_files <- function(folder) {
       modified = character()
     ))
   }
-
+  
   files <- list.files(folder, recursive = TRUE, full.names = TRUE)
   files <- files[file.exists(files) & !dir.exists(files)]
-
+  
   if (length(files) == 0) {
     return(data.frame(
       name = character(),
@@ -777,7 +777,7 @@ list_output_files <- function(folder) {
       modified = character()
     ))
   }
-
+  
   info <- file.info(files)
   data.frame(
     name = gsub("\\\\", "/", sub(paste0("^", normalizePath(folder, winslash = "/", mustWork = FALSE), "/?"), "", normalizePath(files, winslash = "/", mustWork = FALSE))),
@@ -791,15 +791,15 @@ list_output_files <- function(folder) {
 safe_output_delete <- function(path, folder) {
   normalized_path <- normalizePath(path, winslash = "/", mustWork = TRUE)
   normalized_folder <- normalizePath(folder, winslash = "/", mustWork = TRUE)
-
+  
   if (!startsWith(normalized_path, paste0(normalized_folder, "/")) && normalized_path != normalized_folder) {
     stop("Refusing to delete a file outside the selected output folder.", call. = FALSE)
   }
-
+  
   if (dir.exists(normalized_path)) {
     stop("Refusing to delete a folder. Select a file instead.", call. = FALSE)
   }
-
+  
   unlink(normalized_path)
   normalized_path
 }
@@ -828,14 +828,14 @@ read_config_table_or_empty <- function(path, sheet, columns) {
   if (!file.exists(path) || !sheet %in% readxl::excel_sheets(path)) {
     return(empty_config_table(columns))
   }
-
+  
   tbl <- readxl::read_excel(path, sheet = sheet, .name_repair = "unique_quiet")
   tbl <- as.data.frame(tbl, stringsAsFactors = FALSE)
-
+  
   for (column in setdiff(columns, names(tbl))) {
     tbl[[column]] <- NA_character_
   }
-
+  
   tbl <- tbl[, columns, drop = FALSE]
   tbl[] <- lapply(tbl, as.character)
   tbl
@@ -856,10 +856,10 @@ upsert_table_by_keys <- function(tbl, rows, key_col) {
 
 next_sort_order <- function(plots, sector) {
   if (nrow(plots) == 0 || !"sort_order" %in% names(plots)) return(1)
-
+  
   sector_orders <- suppressWarnings(as.numeric(plots$sort_order[plots$sector == sector]))
   sector_orders <- sector_orders[!is.na(sector_orders)]
-
+  
   if (length(sector_orders) == 0) 1 else max(sector_orders) + 1
 }
 
@@ -888,10 +888,10 @@ args_to_config_rows <- function(id_col, id_value, args, notes = "") {
   args <- args[!vapply(args, function(value) {
     is.character(value) && length(value) == 1 && !nzchar(trimws(value))
   }, logical(1))]
-
+  
   columns <- c(id_col, "arg_name", "arg_value", "arg_type", "notes")
   if (length(args) == 0) return(empty_config_table(columns))
-
+  
   rows <- data.frame(
     id = id_value,
     arg_name = names(args),
@@ -915,7 +915,7 @@ build_release_settings_table <- function(input) {
     base_size = input$base_size,
     overwrite = TRUE
   )
-
+  
   notes <- c(
     release_year = "SOPI release calendar year",
     release_round = "SOPI release round: June or December",
@@ -926,7 +926,7 @@ build_release_settings_table <- function(input) {
     base_size = "Default chart base font size",
     overwrite = "Reserved for future use"
   )
-
+  
   data.frame(
     setting_name = names(values),
     setting_value = vapply(values, format_config_value, character(1)),
@@ -938,7 +938,7 @@ build_release_settings_table <- function(input) {
 
 build_sector_settings_table <- function(existing = NULL) {
   columns <- c("sector", "active", "palette", "output_subfolder", "notes")
-
+  
   if (!is.null(existing) && nrow(existing) > 0) {
     existing <- existing[, columns, drop = FALSE]
     missing <- setdiff(sopi_sectors, existing$sector)
@@ -946,9 +946,9 @@ build_sector_settings_table <- function(existing = NULL) {
     existing <- empty_config_table(columns)
     missing <- sopi_sectors
   }
-
+  
   if (length(missing) == 0) return(existing)
-
+  
   dplyr::bind_rows(
     existing,
     data.frame(
@@ -998,13 +998,13 @@ build_data_args_config <- function(input, data_source_id) {
   if (!identical(input$data_source_type, "function")) {
     return(empty_config_table(c("data_source_id", "arg_name", "arg_value", "arg_type", "notes")))
   }
-
+  
   args <- merge_args(
     data_context_args(input),
     collect_function_arguments(input, input$data_function, "data_arg", data_standard_exclusions()),
     parse_extra_args(input$data_extra_args)
   )
-
+  
   args_to_config_rows("data_source_id", data_source_id, args, "Created from Shiny app")
 }
 
@@ -1015,7 +1015,7 @@ build_plot_config <- function(input, plot_id, data_source_id, existing_plots) {
   } else {
     as.character(next_sort_order(existing_plots, input$sector))
   }
-
+  
   data.frame(
     plot_id = plot_id,
     sector = input$sector,
@@ -1038,20 +1038,20 @@ build_plot_args_config <- function(input, plot_id) {
     parse_extra_args(input$plot_extra_args)
   )
   fn_formals <- names(formals(get(input$plot_function, mode = "function")))
-
+  
   palette_name <- effective_palette_name(input, plot_id)
   if (!is.null(palette_name)) {
     args <- add_palette_args_for_function(args, palette_name, input$plot_function)
   } else {
     args$use_metadata_palette <- TRUE
   }
-
+  
   args <- merge_args(args, collect_chart_registry_args(input, input$plot_function))
   args$width <- input$width
   args$height <- input$height
-
+  
   args <- args[names(args) %in% c(fn_formals, "width", "height", "use_metadata_palette")]
-
+  
   args_to_config_rows("plot_id", plot_id, args, "Created from Shiny app")
 }
 
@@ -1060,14 +1060,14 @@ build_selected_palette_rows <- function(input, metadata_resource, plot_id = NULL
   if (is.null(palette_name)) {
     return(empty_config_table(c("palette", "item", "hex", "notes")))
   }
-
+  
   if (identical(input$palette_mode, "custom")) {
     palette <- parse_custom_palette_text(input$custom_palette_text)
   } else if (
     identical(input$plot_function, "plot_monthly_descriptive") &&
-      is.null(selected_palette_name(input)) &&
-      !is.null(data) &&
-      !is_blank(input$x_field)
+    is.null(selected_palette_name(input)) &&
+    !is.null(data) &&
+    !is_blank(input$x_field)
   ) {
     y_field <- if (is_blank(input$column_value)) "value" else input$column_value
     month_year <- input[[safe_input_id("plot_arg", "month_year")]]
@@ -1086,11 +1086,11 @@ build_selected_palette_rows <- function(input, metadata_resource, plot_id = NULL
   } else {
     palette <- palette_from_custom_metadata(metadata_resource, palette_name)
   }
-
+  
   if (is.null(palette) || length(palette) == 0) {
     return(empty_config_table(c("palette", "item", "hex", "notes")))
   }
-
+  
   data.frame(
     palette = palette_name,
     item = names(palette),
@@ -1103,7 +1103,7 @@ build_selected_palette_rows <- function(input, metadata_resource, plot_id = NULL
 write_release_config_from_app <- function(input, project_root, plot_id, data_source_id, data = NULL) {
   config_path <- release_config_path(project_root, input$release_year, input$release_round)
   dir.create(dirname(config_path), recursive = TRUE, showWarnings = FALSE)
-
+  
   sheet_columns <- list(
     release_settings = c("setting_name", "setting_value", "setting_type", "notes"),
     settings_sector = c("sector", "active", "palette", "output_subfolder", "notes"),
@@ -1114,12 +1114,12 @@ write_release_config_from_app <- function(input, project_root, plot_id, data_sou
     run_control = c("setting_name", "setting_value", "setting_type", "notes"),
     palettes = c("palette", "item", "hex", "notes")
   )
-
+  
   tables <- lapply(names(sheet_columns), function(sheet) {
     read_config_table_or_empty(config_path, sheet, sheet_columns[[sheet]])
   })
   names(tables) <- names(sheet_columns)
-
+  
   tables$release_settings <- upsert_table_by_keys(
     tables$release_settings,
     build_release_settings_table(input),
@@ -1164,7 +1164,7 @@ write_release_config_from_app <- function(input, project_root, plot_id, data_sou
       selected_palette_rows$palette[[1]]
     )
   }
-
+  
   if (nrow(tables$run_control) == 0) {
     tables$run_control <- data.frame(
       setting_name = c("run_all_active", "sector_filter", "plot_id_filter", "dry_run", "save_logs"),
@@ -1180,13 +1180,13 @@ write_release_config_from_app <- function(input, project_root, plot_id, data_sou
       stringsAsFactors = FALSE
     )
   }
-
+  
   wb <- openxlsx::createWorkbook()
   for (sheet in names(tables)) {
     openxlsx::addWorksheet(wb, sheet)
     openxlsx::writeData(wb, sheet, tables[[sheet]], withFilter = TRUE)
   }
-
+  
   openxlsx::saveWorkbook(wb, config_path, overwrite = TRUE)
   config_path
 }
@@ -1208,11 +1208,11 @@ build_data <- function(input) {
     call_named_function(input$data_function, args)
   } else {
     path <- selected_excel_path(input, project_root)
-
+    
     if (!file.exists(path)) {
       stop("Excel data file not found: ", path, call. = FALSE)
     }
-
+    
     if (is_blank(input$excel_range)) {
       readxl::read_excel(path, sheet = input$excel_sheet)
     } else {
@@ -1229,7 +1229,7 @@ build_plot <- function(input, data) {
     parse_extra_args(input$plot_extra_args)
   )
   preview_palette <- custom_palette_for_preview(input, data)
-
+  
   if (!is.null(preview_palette)) {
     args <- add_palette_args_for_function(args, preview_palette, input$plot_function)
   } else if (identical(input$plot_function, "plot_monthly_descriptive") && !is_blank(input$x_field)) {
@@ -1254,9 +1254,9 @@ build_plot <- function(input, data) {
   } else {
     args$use_metadata_palette <- TRUE
   }
-
+  
   args <- merge_args(args, collect_chart_registry_args(input, input$plot_function))
-
+  
   plot_args <- clean_plot_args(
     args = args,
     config = empty_config(),
@@ -1265,7 +1265,7 @@ build_plot <- function(input, data) {
     metadata_resource = load_metadata_resource(project_root)
   )
   plot_args$data <- data
-
+  
   call_named_function(input$plot_function, plot_args)
 }
 
@@ -1377,7 +1377,8 @@ ui <- fluidPage(
               "input.data_source_type == 'function'",
               selectInput("data_function", "Data function", choices = data_function_names),
               uiOutput("data_function_args"),
-              textAreaInput("data_extra_args", "Extra data arguments", value = "seed = 42", rows = 3)
+              #textAreaInput("data_extra_args", "Extra data arguments", value = "seed = 42", rows = 3)
+              textAreaInput("data_extra_args", "Extra data arguments")
             ),
             conditionalPanel(
               "input.data_source_type == 'excel'",
@@ -1548,12 +1549,12 @@ server <- function(input, output, session) {
   output_refresh <- reactiveVal(0)
   palette_refresh <- reactiveVal(0)
   last_auto_forecast_years <- reactiveVal(NULL)
-
+  
   metadata_resource <- reactive({
     palette_refresh()
     load_metadata_resource(project_root)
   })
-
+  
   output_folder <- reactive({
     build_output_folder(
       project_root = project_root,
@@ -1562,79 +1563,79 @@ server <- function(input, output, session) {
       input = input
     )
   })
-
+  
   output_files <- reactive({
     output_refresh()
     input$releases_root
     input$output_folder_template
     list_output_files(output_folder())
   })
-
+  
   observeEvent(list(input$releases_root, input$output_folder_template, input$manual_data_workbook_template), {
     if (!is.null(input$releases_root) && nzchar(trimws(input$releases_root))) {
       Sys.setenv(SOPI_RELEASES_ROOT = normalizePath(input$releases_root, winslash = "/", mustWork = FALSE))
     }
     output_refresh(output_refresh() + 1)
   })
-
+  
   observeEvent(list(input$release_year, input$release_round, input$sector), {
     output_refresh(output_refresh() + 1)
   }, ignoreInit = TRUE)
-
+  
   observeEvent(list(input$forecast, input$release_year, input$release_round), {
     if (!isTRUE(input$forecast)) {
       last_auto_forecast_years(NULL)
       return()
     }
-
+    
     defaults <- forecast_year_defaults(input$release_year, input$release_round)
     if (is.na(defaults$start) || is.na(defaults$end)) {
       return()
     }
-
+    
     current_start <- suppressWarnings(as.integer(input$forecast_start_year))
     current_end <- suppressWarnings(as.integer(input$forecast_end_year))
     last_auto <- last_auto_forecast_years()
-
+    
     is_empty <- length(current_start) == 0 || length(current_end) == 0 ||
       is.na(current_start) || is.na(current_end)
     is_unchanged_auto <- !is.null(last_auto) &&
       length(current_start) > 0 && length(current_end) > 0 &&
       identical(current_start, last_auto$start) &&
       identical(current_end, last_auto$end)
-
+    
     if (is.null(last_auto) || is_empty || is_unchanged_auto) {
       updateNumericInput(session, "forecast_start_year", value = defaults$start)
       updateNumericInput(session, "forecast_end_year", value = defaults$end)
       last_auto_forecast_years(defaults)
     }
   }, ignoreInit = TRUE)
-
+  
   output$saved_palette_selector <- renderUI({
     choices <- palette_choices_from_metadata(metadata_resource())
-
+    
     if (length(choices) == 0) {
       return(tags$p(class = "sopi-note", "No saved custom palettes yet. Create one below, then click Save Palette."))
     }
-
+    
     selectInput("saved_palette", "Saved custom palette", choices = choices, selected = choices[[1]])
   })
-
+  
   current_palette_categories <- reactive({
     data <- tryCatch(loaded_data(), error = function(e) NULL)
     if (is.null(data)) {
       return(character())
     }
-
+    
     if (
       identical(input$plot_function, "plot_monthly_descriptive") &&
-        exists("sopi_monthly_descriptive_legend_keys", mode = "function") &&
-        !is_blank(input$x_field)
+      exists("sopi_monthly_descriptive_legend_keys", mode = "function") &&
+      !is_blank(input$x_field)
     ) {
       y_field <- if (is_blank(input$column_value)) "value" else input$column_value
       month_year <- input[[safe_input_id("plot_arg", "month_year")]]
       month_year <- if (is.null(month_year) || is_blank(month_year)) NULL else month_year
-
+      
       return(sopi_monthly_descriptive_legend_keys(
         data = data,
         date_var = input$x_field,
@@ -1642,22 +1643,22 @@ server <- function(input, output, session) {
         month_year = month_year
       ))
     }
-
+    
     if (is_blank(input$group_field) || !input$group_field %in% names(data)) {
       return(character())
     }
-
+    
     categories <- unique(as.character(data[[input$group_field]]))
     categories[!is.na(categories) & nzchar(categories)]
   })
-
+  
   observeEvent(input$fill_palette_from_data, {
     categories <- current_palette_categories()
     if (length(categories) == 0) {
       output$palette_status <- renderText("Load data and select the chart fields first.")
       return()
     }
-
+    
     if (identical(input$plot_function, "plot_monthly_descriptive")) {
       palette <- monthly_descriptive_palette(
         categories = categories,
@@ -1670,11 +1671,11 @@ server <- function(input, output, session) {
         sector = input$sector,
         categories = categories
       )
-
+      
       palette <- complete_palette(categories, metadata_style$palette)
     }
     updateTextAreaInput(session, "custom_palette_text", value = format_palette_text(palette))
-
+    
     if (is_blank(input$custom_palette_name)) {
       updateTextInput(
         session,
@@ -1682,32 +1683,32 @@ server <- function(input, output, session) {
         value = paste0(safe_config_id(input$sector, "sector"), "_custom")
       )
     }
-
+    
     output$palette_status <- renderText("Filled palette from the current chart categories.")
   })
-
+  
   observeEvent(input$load_saved_palette, {
     palette_name <- input$saved_palette
     palette <- palette_from_custom_metadata(metadata_resource(), palette_name)
-
+    
     if (is.null(palette) || length(palette) == 0) {
       output$palette_status <- renderText("No saved palette selected or the selected palette has no colours.")
       return()
     }
-
+    
     updateTextInput(session, "custom_palette_name", value = palette_name)
     updateTextAreaInput(session, "custom_palette_text", value = format_palette_text(palette))
     updateSelectInput(session, "palette_mode", selected = "custom")
     output$palette_status <- renderText(paste("Loaded saved palette:", palette_name))
   })
-
+  
   observeEvent(input$save_custom_palette, {
     result <- tryCatch({
       palette <- parse_custom_palette_text(input$custom_palette_text)
       if (length(palette) == 0) {
         stop("Add at least one palette item before saving.", call. = FALSE)
       }
-
+      
       path <- write_custom_palette(
         project_root = project_root,
         palette_name = input$custom_palette_name,
@@ -1715,12 +1716,12 @@ server <- function(input, output, session) {
         sector = input$sector,
         notes = "Created from Shiny app"
       )
-
+      
       list(ok = TRUE, path = path, palette_name = trimws(input$custom_palette_name))
     }, error = function(e) {
       list(ok = FALSE, message = conditionMessage(e))
     })
-
+    
     if (isTRUE(result$ok)) {
       palette_refresh(palette_refresh() + 1)
       updateSelectInput(session, "palette_mode", selected = "saved")
@@ -1732,11 +1733,11 @@ server <- function(input, output, session) {
       output$palette_status <- renderText(paste("Palette save failed:", result$message))
     }
   })
-
+  
   output$palette_preview <- renderUI({
     palette <- tryCatch({
       mode <- input$palette_mode %||% "metadata"
-
+      
       if (identical(mode, "custom")) {
         parse_custom_palette_text(input$custom_palette_text)
       } else if (identical(mode, "saved")) {
@@ -1758,11 +1759,11 @@ server <- function(input, output, session) {
     }, error = function(e) {
       NULL
     })
-
+    
     if (is.null(palette) || length(palette) == 0) {
       return(tags$p(class = "sopi-note", "No palette to preview yet."))
     }
-
+    
     tags$div(lapply(seq_along(palette), function(i) {
       tags$div(
         style = "display:flex; align-items:center; gap:8px; margin-bottom:4px;",
@@ -1772,41 +1773,41 @@ server <- function(input, output, session) {
       )
     }))
   })
-
+  
   output$resolved_output_folder <- renderText({
     output_folder()
   })
-
+  
   output$resolved_excel_path <- renderText({
     selected_excel_path(input, project_root)
   })
-
+  
   excel_sheets <- reactive({
     path <- selected_excel_path(input, project_root)
     if (is.null(path) || !nzchar(trimws(path)) || !file.exists(path)) {
       return(character())
     }
-
+    
     tryCatch(
       readxl::excel_sheets(path),
       error = function(e) character()
     )
   })
-
+  
   output$excel_sheet_selector <- renderUI({
     sheets <- excel_sheets()
-
+    
     if (length(sheets) == 0) {
       return(tags$p(class = "sopi-note", "No sheets found. Check that the workbook exists and is closed if SharePoint is syncing it."))
     }
-
+    
     selectInput("excel_sheet", "Sheet", choices = sheets, selected = sheets[[1]])
   })
-
+  
   output$config_path_preview <- renderText({
     release_config_path(project_root, input$release_year, input$release_round)
   })
-
+  
   resolved_svg_path <- reactive({
     build_app_output_path(
       project_root = project_root,
@@ -1816,22 +1817,22 @@ server <- function(input, output, session) {
       output_file = normalize_svg_filename(input$output_file)
     )
   })
-
+  
   output$resolved_svg_path <- renderText({
     resolved_svg_path()
   })
-
+  
   observeEvent(input$refresh_output_files, {
     output_refresh(output_refresh() + 1)
   })
-
+  
   output$output_file_selector <- renderUI({
     files <- output_files()
-
+    
     if (nrow(files) == 0) {
       return(tags$p(class = "sopi-note", paste("No files found in", output_folder())))
     }
-
+    
     selectInput(
       "selected_output_file",
       "Select file",
@@ -1839,23 +1840,23 @@ server <- function(input, output, session) {
       selected = files$path[[1]]
     )
   })
-
+  
   output$output_file_table <- renderTable({
     files <- output_files()
     if (nrow(files) == 0) return(NULL)
     files[, c("name", "size_kb", "modified"), drop = FALSE]
   })
-
+  
   output$output_file_preview <- renderUI({
     req(input$selected_output_file)
     path <- input$selected_output_file
-
+    
     if (!file.exists(path)) {
       return(tags$p(class = "sopi-note", "The selected file no longer exists."))
     }
-
+    
     ext <- tolower(tools::file_ext(path))
-
+    
     if (ext == "svg") {
       svg <- paste(readLines(path, warn = FALSE), collapse = "\n")
       return(tags$div(
@@ -1863,28 +1864,28 @@ server <- function(input, output, session) {
         HTML(svg)
       ))
     }
-
+    
     if (ext %in% c("txt", "csv", "log", "md")) {
       lines <- readLines(path, warn = FALSE, n = 80)
       return(tags$pre(class = "sopi-preview", paste(lines, collapse = "\n")))
     }
-
+    
     tags$p(class = "sopi-note", paste("Preview is not available for .", ext, " files. Select an SVG file to preview the chart.", sep = ""))
   })
-
+  
   observeEvent(input$delete_output_file, {
     req(input$selected_output_file)
-
+    
     if (!isTRUE(input$confirm_delete_output)) {
       output$output_file_status <- renderText("Tick the confirmation box before deleting.")
       return()
     }
-
+    
     deleted_path <- tryCatch(
       safe_output_delete(input$selected_output_file, output_folder()),
       error = function(e) e
     )
-
+    
     if (inherits(deleted_path, "error")) {
       output$output_file_status <- renderText(conditionMessage(deleted_path))
     } else {
@@ -1893,7 +1894,7 @@ server <- function(input, output, session) {
       output_refresh(output_refresh() + 1)
     }
   })
-
+  
   output$data_function_args <- renderUI({
     req(input$data_function)
     tagList(
@@ -1901,29 +1902,29 @@ server <- function(input, output, session) {
       function_argument_inputs(input$data_function, "data_arg", data_standard_exclusions())
     )
   })
-
+  
   loaded_data <- eventReactive(input$load_data, {
     build_data(input)
   })
-
+  
   output$data_status <- renderPrint({
     data <- loaded_data()
     cat(nrow(data), "rows x", ncol(data), "columns\n")
     cat(paste(names(data), collapse = ", "))
   })
-
+  
   output$data_preview <- renderTable({
     utils::head(loaded_data(), 10)
   })
-
+  
   output$field_selectors <- renderUI({
     data <- loaded_data()
     fields <- field_choices(data)
-
+    
     if (length(fields) == 0) {
       return(tags$p(class = "sopi-note", "Load data first to choose fields."))
     }
-
+    
     req(input$plot_function)
     render_chart_registry_section(
       function_name = input$plot_function,
@@ -1932,7 +1933,7 @@ server <- function(input, output, session) {
       empty_message = "This plot function does not need field selectors."
     )
   })
-
+  
   output$plot_function_args <- renderUI({
     req(input$plot_function)
     tagList(
@@ -1940,7 +1941,7 @@ server <- function(input, output, session) {
       function_argument_inputs(input$plot_function, "plot_arg", plot_standard_exclusions())
     )
   })
-
+  
   output$chart_option_controls <- renderUI({
     req(input$plot_function)
     render_chart_registry_section(
@@ -1949,7 +1950,7 @@ server <- function(input, output, session) {
       empty_message = "No chart option controls are needed for this plot function."
     )
   })
-
+  
   output$chart_label_controls <- renderUI({
     req(input$plot_function)
     render_chart_registry_section(
@@ -1958,7 +1959,7 @@ server <- function(input, output, session) {
       empty_message = "No label controls are needed for this plot function."
     )
   })
-
+  
   output$chart_advanced_controls <- renderUI({
     req(input$plot_function)
     render_chart_registry_section(
@@ -1967,43 +1968,43 @@ server <- function(input, output, session) {
       empty_message = "No advanced controls are needed for this plot function."
     )
   })
-
+  
   preview_plot <- eventReactive(input$refresh_preview, {
     req(loaded_data())
     build_plot(input, loaded_data())
   })
-
+  
   preview_height_px <- reactive({
     width <- suppressWarnings(as.numeric(input$width))
     height <- suppressWarnings(as.numeric(input$height))
-
+    
     if (is.na(width) || width <= 0 || is.na(height) || height <= 0) {
       return(420)
     }
-
+    
     max(320, min(700, round(520 * height / width)))
   })
-
+  
   output$chart_preview_ui <- renderUI({
     plotOutput("chart_preview", height = paste0(preview_height_px(), "px"))
   })
-
+  
   output$chart_preview <- renderPlot({
     preview_plot()
   })
-
+  
   observeEvent(input$save_svg, {
     data <- tryCatch(loaded_data(), error = function(e) NULL)
     if (is.null(data)) {
       output$save_status <- renderText("Save failed: load data first in the Data tab.")
       return()
     }
-
+    
     output_file <- normalize_svg_filename(input$output_file)
     plot_id <- safe_config_id(input$plot_id, fallback = safe_config_id(output_file, "chart"))
     data_source_id <- safe_config_id(input$data_source_id, fallback = paste0(plot_id, "_data"))
     output_path <- resolved_svg_path()
-
+    
     result <- tryCatch({
       palette_path <- NULL
       if (identical(input$palette_mode, "custom")) {
@@ -2019,16 +2020,16 @@ server <- function(input, output, session) {
           palette_refresh(palette_refresh() + 1)
         }
       }
-
+      
       plot <- build_plot(input, data)
-
+      
       save_chart_svg(
         plot = plot,
         output_path = output_path,
         width = input$width,
         height = input$height
       )
-
+      
       config_path <- NULL
       if (isTRUE(input$update_chart_config)) {
         config_path <- write_release_config_from_app(
@@ -2039,12 +2040,12 @@ server <- function(input, output, session) {
           data = data
         )
       }
-
+      
       list(ok = TRUE, output_path = output_path, config_path = config_path, palette_path = palette_path)
     }, error = function(e) {
       list(ok = FALSE, message = conditionMessage(e), output_path = output_path)
     })
-
+    
     if (isTRUE(result$ok)) {
       output$save_status <- renderText({
         lines <- paste("Saved SVG:", result$output_path)
@@ -2066,3 +2067,4 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui, server)
+
