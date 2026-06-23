@@ -80,9 +80,7 @@ get_omt_data <- function(
     measures_list = omt_default_measures(),
     filters_list = NULL,
     sector = NULL,
-    forecast_group = NULL,
-    date_column = NULL,
-    group_column = NULL
+    forecast_group = NULL
 ) {
   columns_list <- omt_named_list(columns_list)
   measures_list <- omt_named_list(measures_list)
@@ -112,7 +110,7 @@ get_omt_data <- function(
     }
   }
 
-  data <- getPwrBI(
+  getPwrBI(
     dataset_id = dataset_id,
     mpi_tenant_id = get_app_token("mpi_tenant_id"),
     local_r_code_app_id = get_app_token("local_r_code_app_id"),
@@ -120,14 +118,4 @@ get_omt_data <- function(
     measures_list = measures_list,
     filters_list = filters_list
   )
-
-  if (!is.null(date_column) && date_column %in% names(data)) {
-    data <- dplyr::rename(data, date = dplyr::all_of(date_column))
-  }
-
-  if (!is.null(group_column) && group_column %in% names(data)) {
-    data <- dplyr::rename(data, group = dplyr::all_of(group_column))
-  }
-
-  data
 }

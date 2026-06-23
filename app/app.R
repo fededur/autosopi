@@ -109,14 +109,43 @@ data_function_names <- list_r_function_names(
   file.path(project_root, "R", "data_functions"),
   include_plot_aliases = FALSE
 )
-data_function_names <- data_function_names[vapply(data_function_names, function(function_name) {
-  if (!grepl("^(get|calculate)_", function_name)) return(FALSE)
+
+data_function_source_file <- function(function_name) {
+  files <- list.files(file.path(project_root, "R", "data_functions"), pattern = "\\.R$", full.names = TRUE)
+
+  for (file in files) {
+    lines <- readLines(file, warn = FALSE)
+    pattern <- paste0("^", function_name, "\\s*(<-|=)\\s*function\\s*\\(")
+    if (any(grepl(pattern, lines))) {
+      return(file)
+    }
+  }
+
+  NA_character_
+}
+
+is_user_facing_data_function <- function(function_name) {
+  if (!grepl("^get_", function_name)) return(FALSE)
+  if (grepl("_(default|helper|filter|named|list|parse|format|validate)_?", function_name)) return(FALSE)
   if (!exists(function_name, mode = "function")) return(FALSE)
+
+  source_file <- data_function_source_file(function_name)
+  if (!is.na(source_file)) {
+    file_text <- readLines(source_file, warn = FALSE)
+    if (any(grepl("@app_hidden|app_hidden:\\s*true", file_text, ignore.case = TRUE))) {
+      return(FALSE)
+    }
+  }
+
   fn_args <- names(formals(get(function_name, mode = "function")))
   if (length(fn_args) == 0) return(FALSE)
-  first_arg <- fn_args[[1]]
-  !identical(first_arg, "data")
-}, logical(1))]
+
+  !identical(fn_args[[1]], "data")
+}
+
+data_function_names <- data_function_names[
+  vapply(data_function_names, is_user_facing_data_function, logical(1))
+]
 
 parse_extra_args <- function(text) {
   if (is.null(text) || !nzchar(trimws(text))) return(list())
