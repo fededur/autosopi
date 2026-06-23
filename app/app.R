@@ -110,8 +110,11 @@ data_function_names <- list_r_function_names(
   include_plot_aliases = FALSE
 )
 data_function_names <- data_function_names[vapply(data_function_names, function(function_name) {
+  if (!grepl("^(get|calculate)_", function_name)) return(FALSE)
   if (!exists(function_name, mode = "function")) return(FALSE)
-  first_arg <- names(formals(get(function_name, mode = "function")))[[1]]
+  fn_args <- names(formals(get(function_name, mode = "function")))
+  if (length(fn_args) == 0) return(FALSE)
+  first_arg <- fn_args[[1]]
   !identical(first_arg, "data")
 }, logical(1))]
 
@@ -180,6 +183,43 @@ parse_named_mapping_text <- function(text) {
   
   mapping <- stats::setNames(values, keys)
   mapping[!duplicated(names(mapping))]
+}
+
+omt_list_arg_names <- c("columns_list", "measures_list", "filters_list")
+
+is_omt_list_arg <- function(function_name, arg_name) {
+  identical(function_name, "get_omt_data") && arg_name %in% omt_list_arg_names
+}
+
+omt_list_arg_label <- function(arg_name) {
+  switch(
+    arg_name,
+    columns_list = "Power BI columns",
+    measures_list = "Power BI measures",
+    filters_list = "Power BI filters",
+    arg_name
+  )
+}
+
+omt_list_arg_placeholder <- function(arg_name) {
+  switch(
+    arg_name,
+    columns_list = "Output column = Power BI table\nMonth Start Date = Time",
+    measures_list = "Output measure = DAX measure\nrevenue = 'Export Measures'[Export Free On Board ($NZ)]",
+    filters_list = "Filter name = DAX filter\nPrimary Industry Sector = 'NZHSC'[Primary Industry Sector] in {\"Seafood\"}",
+    "Output name = Power BI table name, DAX measure, or DAX filter"
+  )
+}
+
+formal_default_named_text <- function(function_name, arg_name) {
+  default <- formals(get(function_name, mode = "function"))[[arg_name]]
+  value <- tryCatch(eval(default, envir = parent.frame()), error = function(e) NULL)
+
+  if (is.null(value) || length(value) == 0 || is.null(names(value))) {
+    return("")
+  }
+
+  paste(paste(names(value), unname(unlist(value)), sep = " = "), collapse = "\n")
 }
 
 is_hex_colour <- function(value) {
@@ -537,8 +577,19 @@ function_argument_inputs <- function(function_name, prefix, exclude) {
   tagList(lapply(args, function(arg) {
     default <- formal_default_text(function_name, arg)
     id <- safe_input_id(prefix, arg)
-    
-    if (is.logical(default)) {
+
+    if (is_omt_list_arg(function_name, arg)) {
+      tagList(
+        textAreaInput(
+          id,
+          omt_list_arg_label(arg),
+          value = formal_default_named_text(function_name, arg),
+          rows = 5,
+          placeholder = omt_list_arg_placeholder(arg)
+        ),
+        tags$p(class = "sopi-note", "Use one named item per line, for example: revenue = 'Export Measures'[Export Free On Board ($NZ)].")
+      )
+    } else if (is.logical(default)) {
       checkboxInput(id, arg, value = default)
     } else if (is.numeric(default)) {
       numericInput(id, arg, value = default)
@@ -558,8 +609,14 @@ collect_function_arguments <- function(input, function_name, prefix, exclude) {
     
     if (is.null(value)) next
     if (is.character(value) && !nzchar(trimws(value))) next
-    
-    values[[arg]] <- if (is.character(value)) parse_guess(value) else value
+
+    values[[arg]] <- if (is_omt_list_arg(function_name, arg)) {
+      parse_named_mapping_text(value)
+    } else if (is.character(value)) {
+      parse_guess(value)
+    } else {
+      value
+    }
   }
   
   values
