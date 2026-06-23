@@ -74,13 +74,21 @@ omt_filter_in <- function(table, column, values) {
   sprintf("'%s'[%s] in {%s}", table, column, quoted_values)
 }
 
+omt_filter_values <- function(values) {
+  if (is.null(values) || length(values) == 0) {
+    return(character())
+  }
+
+  values <- unlist(strsplit(as.character(values), ",", fixed = TRUE))
+  values <- trimws(values)
+  values[nzchar(values) & !is.na(values)]
+}
+
 get_omt_data <- function(
     dataset_id = "36a78684-827e-4296-8983-1e78343fe6f0",
     columns_list = omt_default_columns(),
     measures_list = omt_default_measures(),
-    filters_list = NULL,
-    sector = NULL,
-    forecast_group = NULL
+    filters_list = NULL
 ) {
   columns_list <- omt_named_list(columns_list)
   measures_list <- omt_named_list(measures_list)
@@ -92,22 +100,6 @@ get_omt_data <- function(
 
   if (length(measures_list) == 0) {
     measures_list <- omt_default_measures()
-  }
-
-  sector <- setdiff(as.character(sector), "All sectors")
-
-  if (!is.null(sector) && length(sector) > 0 && !"Primary Industry Sector" %in% names(filters_list)) {
-    sector_filter <- omt_filter_in("NZHSC", "Primary Industry Sector", as.character(sector))
-    if (!is.null(sector_filter)) {
-      filters_list[["Primary Industry Sector"]] <- sector_filter
-    }
-  }
-
-  if (!is.null(forecast_group) && length(forecast_group) > 0 && !"SOPI Forecast Group" %in% names(filters_list)) {
-    forecast_group_filter <- omt_filter_in("NZHSC", "SOPI Forecast Group", as.character(forecast_group))
-    if (!is.null(forecast_group_filter)) {
-      filters_list[["SOPI Forecast Group"]] <- forecast_group_filter
-    }
   }
 
   getPwrBI(

@@ -214,7 +214,7 @@ parse_named_mapping_text <- function(text) {
   mapping[!duplicated(names(mapping))]
 }
 
-omt_list_arg_names <- c("columns_list", "measures_list", "filters_list")
+omt_list_arg_names <- c("columns_list", "measures_list")
 
 is_omt_list_arg <- function(function_name, arg_name) {
   identical(function_name, "get_omt_data") && arg_name %in% omt_list_arg_names
@@ -225,7 +225,6 @@ omt_list_arg_label <- function(arg_name) {
     arg_name,
     columns_list = "Power BI columns",
     measures_list = "Power BI measures",
-    filters_list = "Power BI filters",
     arg_name
   )
 }
@@ -235,10 +234,13 @@ omt_list_arg_placeholder <- function(arg_name) {
     arg_name,
     columns_list = "Output column = Power BI table\nMonth Start Date = Time",
     measures_list = "Output measure = DAX measure\nrevenue = 'Export Measures'[Export Free On Board ($NZ)]",
-    filters_list = "Filter name = DAX filter\nPrimary Industry Sector = 'NZHSC'[Primary Industry Sector] in {\"Seafood\"}",
     "Output name = Power BI table name, DAX measure, or DAX filter"
   )
 }
+
+data_arg_label <- function(function_name, arg_name) arg_name
+
+data_arg_note <- function(function_name, arg_name) NULL
 
 formal_default_named_text <- function(function_name, arg_name) {
   default <- formals(get(function_name, mode = "function"))[[arg_name]]
@@ -249,6 +251,65 @@ formal_default_named_text <- function(function_name, arg_name) {
   }
 
   paste(paste(names(value), unname(unlist(value)), sep = " = "), collapse = "\n")
+}
+
+current_omt_columns <- function(input) {
+  if (!identical(input$data_function, "get_omt_data")) {
+    return(NULL)
+  }
+
+  columns_text <- input[[safe_input_id("data_arg", "columns_list")]]
+  columns <- parse_named_mapping_text(columns_text)
+
+  if (is.null(columns) || length(columns) == 0) {
+    columns <- stats::setNames(c("NZHSC", "NZHSC", "Time"), c("Primary Industry Sector", "SOPI Forecast Group", "Month Start Date"))
+  }
+
+  columns
+}
+
+omt_filter_input_id <- function(column_name) {
+  safe_input_id("omt_filter", column_name)
+}
+
+split_filter_values <- function(value) {
+  if (is.null(value) || length(value) == 0 || !nzchar(trimws(as.character(value)))) {
+    return(character())
+  }
+
+  values <- trimws(unlist(strsplit(as.character(value), ",", fixed = TRUE)))
+  values[nzchar(values)]
+}
+
+build_omt_filter_expression <- function(table_name, column_name, values) {
+  values <- split_filter_values(values)
+  if (length(values) == 0) {
+    return(NULL)
+  }
+
+  quoted_values <- paste0('"', values, '"', collapse = ",")
+  sprintf("'%s'[%s] in {%s}", table_name, column_name, quoted_values)
+}
+
+collect_omt_filter_args <- function(input) {
+  columns <- current_omt_columns(input)
+  if (is.null(columns) || length(columns) == 0) {
+    return(list())
+  }
+
+  filters <- character()
+  for (column_name in names(columns)) {
+    value <- input[[omt_filter_input_id(column_name)]]
+    expression <- build_omt_filter_expression(columns[[column_name]], column_name, value)
+    if (is.null(expression)) next
+    filters[[column_name]] <- expression
+  }
+
+  if (length(filters) == 0) {
+    list()
+  } else {
+    list(filters_list = filters)
+  }
 }
 
 is_hex_colour <- function(value) {
@@ -567,6 +628,10 @@ function_extra_args <- function(function_name, exclude) {
   if (!exists(function_name, mode = "function")) return(character())
   
   args <- names(formals(get(function_name, mode = "function")))
+  if (identical(function_name, "get_omt_data")) {
+    exclude <- unique(c(exclude, "filters_list"))
+  }
+
   setdiff(args, c(exclude, "..."))
 }
 
@@ -606,6 +671,8 @@ function_argument_inputs <- function(function_name, prefix, exclude) {
   tagList(lapply(args, function(arg) {
     default <- formal_default_text(function_name, arg)
     id <- safe_input_id(prefix, arg)
+    label <- data_arg_label(function_name, arg)
+    note <- data_arg_note(function_name, arg)
 
     if (is_omt_list_arg(function_name, arg)) {
       tagList(
@@ -619,11 +686,11 @@ function_argument_inputs <- function(function_name, prefix, exclude) {
         tags$p(class = "sopi-note", "Use one named item per line, for example: revenue = 'Export Measures'[Export Free On Board ($NZ)].")
       )
     } else if (is.logical(default)) {
-      checkboxInput(id, arg, value = default)
+      tagList(checkboxInput(id, label, value = default), note)
     } else if (is.numeric(default)) {
-      numericInput(id, arg, value = default)
+      tagList(numericInput(id, label, value = default), note)
     } else {
-      textInput(id, arg, value = as.character(default))
+      tagList(textInput(id, label, value = as.character(default)), note)
     }
   }))
 }
@@ -1088,7 +1155,7 @@ build_data_args_config <- function(input, data_source_id) {
   args <- merge_args(
     data_context_args(input),
     collect_function_arguments(input, input$data_function, "data_arg", data_standard_exclusions()),
-    parse_extra_args(input$data_extra_args)
+    collect_omt_filter_args(input)
   )
   
   args_to_config_rows("data_source_id", data_source_id, args, "Created from Shiny app")
@@ -1288,7 +1355,7 @@ build_data <- function(input) {
       project_args(input),
       data_context_args(input),
       collect_function_arguments(input, input$data_function, "data_arg", data_standard_exclusions()),
-      parse_extra_args(input$data_extra_args),
+      collect_omt_filter_args(input),
       list(project_root = project_root)
     )
     call_named_function(input$data_function, args)
@@ -1462,9 +1529,7 @@ ui <- fluidPage(
             conditionalPanel(
               "input.data_source_type == 'function'",
               selectInput("data_function", "Data function", choices = data_function_names),
-              uiOutput("data_function_args"),
-              #textAreaInput("data_extra_args", "Extra data arguments", value = "seed = 42", rows = 3)
-              textAreaInput("data_extra_args", "Extra data arguments")
+              uiOutput("data_function_args")
             ),
             conditionalPanel(
               "input.data_source_type == 'excel'",
@@ -1985,7 +2050,32 @@ server <- function(input, output, session) {
     req(input$data_function)
     tagList(
       tags$h4("Function arguments"),
-      function_argument_inputs(input$data_function, "data_arg", data_standard_exclusions())
+      function_argument_inputs(input$data_function, "data_arg", data_standard_exclusions()),
+      uiOutput("omt_filter_controls")
+    )
+  })
+
+  output$omt_filter_controls <- renderUI({
+    if (!identical(input$data_function, "get_omt_data")) {
+      return(NULL)
+    }
+
+    columns <- current_omt_columns(input)
+    if (is.null(columns) || length(columns) == 0) {
+      return(NULL)
+    }
+
+    tagList(
+      tags$h4("Power BI filters"),
+      tags$p(class = "sopi-note", "Optional. Enter one or more filter values separated by commas. Leave blank to keep all values."),
+      lapply(names(columns), function(column_name) {
+        textInput(
+          omt_filter_input_id(column_name),
+          paste0("Filter ", column_name),
+          value = "",
+          placeholder = "Example: Seafood, Dairy"
+        )
+      })
     )
   })
   
