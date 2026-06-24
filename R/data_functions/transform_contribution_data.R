@@ -82,7 +82,11 @@ transform_contribution_data <- function(
     mutate(
       driver = factor(driver, levels = fill_order),
       category = fct_reorder(category, net_contribution, .desc = TRUE),
-      category = fct_relevel(category, "All other", after = Inf),
+      category = if ("All other" %in% levels(category)) {
+        fct_relevel(category, "All other", after = Inf)
+      } else {
+        category
+      },
       category = fct_rev(category)
     ) %>%
     select(category, driver, contribution, net_contribution)

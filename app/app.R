@@ -733,6 +733,12 @@ collect_chart_registry_args <- function(input, function_name) {
     if (identical(entry$type, "mapping")) {
       value <- parse_named_mapping_text(value)
       if (is.null(value) || length(value) == 0) next
+      if (identical(function_name, "plot_net_contribution") && identical(entry$id, "fill_labels")) {
+        identity_keys <- names(value)[unname(value) == names(value)]
+        if (length(identity_keys) == length(value)) {
+          next
+        }
+      }
     }
 
     if (identical(entry$type, "vector")) {

@@ -179,7 +179,7 @@ plot_net_contribution <- function(
 
     fill_labels <- complete_labels(legend_keys, fill_labels)
   }
-  legend_labels <- unname(fill_labels[legend_keys])
+  legend_labels <- stats::setNames(unname(fill_labels[legend_keys]), legend_keys)
   
   # =========================
   # ORDERING
