@@ -188,6 +188,9 @@ plot_net_contribution <- function(
   fill_display_labels <- stats::setNames(unname(fill_labels[fill_order]), fill_order)
   point_display_label <- point_label
   fill_values <- stats::setNames(unname(fill_values), fill_order)
+  legend_keys <- c(fill_order, point_label)
+  legend_values <- stats::setNames(c(unname(fill_values), point_colour), legend_keys)
+  legend_labels <- stats::setNames(c(unname(fill_display_labels), point_display_label), legend_keys)
   df[[driver_name]] <- factor(df[[driver_name]], levels = fill_order)
 
   invalid_rows <- is.na(df[[group_name]]) |
@@ -277,6 +280,12 @@ plot_net_contribution <- function(
       x_breaks <- seq(x_limits[1], x_limits[2], length.out = n_breaks)
     }
   }
+
+  legend_items <- data.frame(
+    legend_item = factor(point_label, levels = legend_keys),
+    x = df[[group_name]][1],
+    y = 0
+  )
   
   # =========================
   # PLOT
@@ -293,10 +302,21 @@ plot_net_contribution <- function(
     geom_hline(yintercept = 0, linewidth = 0.25, colour = "#dad9d9") +
     
     geom_point(
-      aes(y = .data[[total_name]], colour = .env$point_display_label),
+      aes(y = .data[[total_name]]),
       shape = 21,
       size = point_size,
       fill = point_colour,
+      colour = point_colour,
+      show.legend = FALSE
+    ) +
+
+    geom_point(
+      data = legend_items,
+      aes(x = x, y = y, fill = legend_item),
+      inherit.aes = FALSE,
+      shape = 21,
+      size = 3,
+      colour = NA,
       show.legend = TRUE
     ) +
     
@@ -313,16 +333,15 @@ plot_net_contribution <- function(
     ) +
     
     scale_fill_manual(
-      values = fill_values,
-      breaks = fill_order,
-      labels = unname(fill_display_labels),
-      drop = FALSE
-    ) +
-
-    scale_colour_manual(
-      values = stats::setNames(point_colour, point_display_label),
-      breaks = point_display_label,
-      labels = point_display_label,
+      values = legend_values,
+      breaks = legend_keys,
+      labels = function(x) {
+        out <- unname(legend_labels[as.character(x)])
+        missing <- is.na(out) | !nzchar(out)
+        missing[is.na(missing)] <- TRUE
+        out[missing] <- as.character(x)[missing]
+        out
+      },
       drop = FALSE
     ) +
     
@@ -331,8 +350,7 @@ plot_net_contribution <- function(
       subtitle = subtitle,
       x = y_label,
       y = x_label,
-      fill = NULL,
-      colour = NULL
+      fill = NULL
     ) +
     
     theme_sopi(
@@ -357,29 +375,18 @@ plot_net_contribution <- function(
     
     guides(
       fill = guide_legend(
-        order = 1,
         keyheight = unit(5, "mm"),
         override.aes = list(
-          shape = rep(22, length(fill_order)),
-          size  = rep(4, length(fill_order)),
-          fill  = unname(fill_values),
+          shape = c(rep(22, length(fill_order)), 21),
+          size  = c(rep(4, length(fill_order)), 3),
+          fill  = unname(legend_values),
           colour = NA
-        )
-      ),
-      colour = guide_legend(
-        order = 2,
-        keyheight = unit(5, "mm"),
-        override.aes = list(
-          shape = 21,
-          size = 3,
-          fill = point_colour,
-          colour = point_colour
         )
       )
     )
   
   if (!legend) {
-    p <- p + guides(fill = "none", colour = "none")
+    p <- p + guides(fill = "none")
   }
   
   return(p)
