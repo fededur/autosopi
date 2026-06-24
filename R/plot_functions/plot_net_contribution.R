@@ -186,17 +186,18 @@ plot_net_contribution <- function(
 
   fill_labels <- complete_labels(fill_order, fill_labels)
   fill_display_labels <- unname(fill_labels[fill_order])
+  fill_display_labels <- stats::setNames(fill_display_labels, fill_order)
   point_display_label <- point_label
-  legend_display_keys <- c(fill_display_labels, point_display_label)
+  legend_display_keys <- c(unname(fill_display_labels), point_display_label)
   legend_display_values <- stats::setNames(
     c(unname(fill_values), point_colour),
     legend_display_keys
   )
-  df$.sopi_driver_label <- unname(fill_labels[as.character(df[[driver_name]])])
-  df[[driver_name]] <- factor(df$.sopi_driver_label, levels = fill_display_labels)
+  df$.sopi_driver_label <- unname(fill_display_labels[as.character(df[[driver_name]])])
+  df$.sopi_driver_label <- factor(df$.sopi_driver_label, levels = unname(fill_display_labels))
 
   invalid_rows <- is.na(df[[group_name]]) |
-    is.na(df[[driver_name]]) |
+    is.na(df$.sopi_driver_label) |
     !is.finite(df[[y_name]]) |
     !is.finite(df[[total_name]])
 
@@ -303,7 +304,7 @@ plot_net_contribution <- function(
   p <- ggplot(df, aes(x = .data[[group_name]], y = .data[[y_name]])) +
     
     geom_col(
-      aes(fill = .data[[driver_name]]),
+      aes(fill = .data$.sopi_driver_label),
       width = col_width,
       show.legend = TRUE
     ) +
