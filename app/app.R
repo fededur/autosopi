@@ -2095,6 +2095,32 @@ server <- function(input, output, session) {
     categories <- unique(as.character(data[[input$group_field]]))
     categories[!is.na(categories) & nzchar(categories)]
   })
+
+  observeEvent(
+    list(input$plot_function, input$driver_field, input$point_label, loaded_data()),
+    {
+      if (!identical(input$plot_function, "plot_net_contribution")) {
+        return()
+      }
+
+      current_value <- input$fill_labels
+      if (!is.null(current_value) && nzchar(trimws(current_value))) {
+        return()
+      }
+
+      keys <- current_palette_categories()
+      if (length(keys) == 0) {
+        keys <- c("Volumes", "Prices", "Net contribution")
+      }
+
+      updateTextAreaInput(
+        session,
+        "fill_labels",
+        value = paste(paste(keys, keys, sep = " = "), collapse = "\n")
+      )
+    },
+    ignoreInit = FALSE
+  )
   
   observeEvent(input$fill_palette_from_data, {
     categories <- current_palette_categories()

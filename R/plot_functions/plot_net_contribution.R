@@ -146,6 +146,21 @@ plot_net_contribution <- function(
   if (is.null(fill_labels)) {
     fill_labels <- stats::setNames(legend_keys, legend_keys)
   } else {
+    fill_labels <- as.character(fill_labels)
+
+    if (!is.null(names(fill_labels)) && any(nzchar(names(fill_labels)))) {
+      names(fill_labels) <- dplyr::recode(
+        names(fill_labels),
+        "Volume" = "Volumes",
+        "volume" = "Volumes",
+        "Quantity" = "Volumes",
+        "quantity" = "Volumes",
+        "Price" = "Prices",
+        "price" = "Prices",
+        .default = names(fill_labels)
+      )
+    }
+
     fill_labels <- complete_labels(legend_keys, fill_labels)
   }
   
