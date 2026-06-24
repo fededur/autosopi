@@ -20,7 +20,11 @@ plot_net_contribution <- function(
     palette = NULL,
     palette_fill = NULL,
     fill_values = NULL,
-    fill_labels = NULL,
+    fill_labels = c(
+      "Volumes" = "Volume contribution",
+      "Prices" = "Price contribution",
+      "Net contribution" = "Net contribution"
+    ),
     fill_order  = c("Volumes", "Prices"),
     col_width = 0.5,
     
