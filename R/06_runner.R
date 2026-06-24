@@ -24,7 +24,7 @@ run_charts <- function(run_plan, config, project_root) {
       )
 
       plot_args <- clean_plot_args(
-        args = resolved$plot_args,
+        args = merge_args(resolved$plot_args, list(plot_function = job$plot_function)),
         config = config,
         project_root = project_root,
         data = data,
@@ -75,6 +75,8 @@ run_charts <- function(run_plan, config, project_root) {
 clean_plot_args <- function(args, config, project_root, data = NULL, metadata_resource = NULL) {
   sector <- args$sector
   group <- args$group
+  driver <- args$driver
+  plot_function <- args$plot_function
   use_metadata_palette <- isTRUE(args$use_metadata_palette)
 
   framework_only <- c(
@@ -101,15 +103,32 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
     args[[arg_name]] <- resolve_palette_arg(args[[arg_name]], config, metadata_resource)
   }
 
-  categories <- NULL
+  label_categories <- NULL
   if (!is.null(data) && !is.null(group) && group %in% names(data)) {
-    categories <- unique(as.character(data[[group]]))
+    label_categories <- unique(as.character(data[[group]]))
+  }
+
+  palette_categories <- label_categories
+  if (identical(plot_function, "plot_net_contribution")) {
+    driver_categories <- NULL
+    if (!is.null(data) && !is.null(driver) && driver %in% names(data)) {
+      driver_categories <- unique(as.character(data[[driver]]))
+      driver_categories <- driver_categories[!is.na(driver_categories) & nzchar(driver_categories)]
+    }
+    point_label <- args$point_label %||% "Net contribution"
+    palette_categories <- unique(c(driver_categories, point_label))
   }
 
   metadata_style <- style_from_metadata(
     metadata_resource = metadata_resource,
     sector = sector,
-    categories = categories
+    categories = palette_categories
+  )
+
+  metadata_label_style <- style_from_metadata(
+    metadata_resource = metadata_resource,
+    sector = sector,
+    categories = label_categories
   )
 
   if (is.null(args$palette)) {
@@ -125,14 +144,31 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
   }
 
   if (is.null(args$labels)) {
-    args$labels <- metadata_style$labels
+    args$labels <- metadata_label_style$labels
   }
 
-  if (!is.null(categories)) {
-    args$palette <- complete_palette(categories, args$palette)
-    args$palette_fill <- complete_palette(categories, args$palette_fill)
-    args$palette_line <- complete_palette(categories, args$palette_line)
-    args$labels <- complete_labels(categories, args$labels)
+  if (identical(plot_function, "plot_net_contribution") && is.null(args$fill_labels)) {
+    args$fill_labels <- metadata_style$labels
+  }
+
+  if (!is.null(palette_categories)) {
+    if (identical(plot_function, "plot_net_contribution")) {
+      args$palette <- complete_palette_by_position(palette_categories, args$palette)
+      args$palette_fill <- complete_palette_by_position(palette_categories, args$palette_fill)
+      args$palette_line <- complete_palette_by_position(palette_categories, args$palette_line)
+    } else {
+      args$palette <- complete_palette(palette_categories, args$palette)
+      args$palette_fill <- complete_palette(palette_categories, args$palette_fill)
+      args$palette_line <- complete_palette(palette_categories, args$palette_line)
+    }
+  }
+
+  if (!is.null(label_categories)) {
+    args$labels <- complete_labels(label_categories, args$labels)
+  }
+
+  if (identical(plot_function, "plot_net_contribution") && !is.null(palette_categories)) {
+    args$fill_labels <- complete_labels(palette_categories, args$fill_labels)
   }
 
   args

@@ -9,6 +9,7 @@ plot_net_contribution <- function(
     other_match = c("all other", "other", "rest"),
     
     labels = NULL,
+    legend_order = NULL,
     
     x_limits = NULL,
     x_breaks = NULL,
@@ -16,8 +17,10 @@ plot_net_contribution <- function(
     
     y_accuracy = 0.1,
     
-    fill_values = c("Volumes" = "#d6effc", "Prices" = "#0080a1"),
-    fill_labels = c("Volumes" = "Volumes", "Prices" = "Prices"),
+    palette = NULL,
+    palette_fill = NULL,
+    fill_values = NULL,
+    fill_labels = NULL,
     fill_order  = c("Volumes", "Prices"),
     col_width = 0.5,
     
@@ -62,6 +65,88 @@ plot_net_contribution <- function(
     mapped <- labels[groups]
     mapped[is.na(mapped)] <- groups[is.na(mapped)]
     df[[group_name]] <- factor(df[[group_name]], levels = groups, labels = mapped)
+  }
+
+  if (!is.null(legend_order)) {
+    fill_order <- setdiff(as.character(legend_order), point_label)
+  }
+
+  fill_order <- as.character(fill_order)
+  fill_order <- fill_order[nzchar(fill_order)]
+  fill_order <- unique(fill_order)
+  if (length(fill_order) == 0) {
+    fill_order <- unique(as.character(df[[driver_name]]))
+  }
+
+  legend_keys <- c(fill_order, point_label)
+
+  align_legend_palette <- function(pal, keys) {
+    if (is.null(pal) || length(pal) == 0) return(NULL)
+
+    pal <- as.character(pal)
+    if (!is.null(names(pal)) && any(nzchar(names(pal)))) {
+      named <- pal[!is.na(names(pal)) & nzchar(names(pal))]
+      matched <- named[keys]
+      missing <- is.na(matched) | !nzchar(matched)
+
+      if (any(missing)) {
+        unused <- unname(named[!names(named) %in% keys])
+        unused <- unused[!is.na(unused) & nzchar(unused)]
+        if (length(unused) > 0) {
+          matched[missing] <- unused[seq_len(min(sum(missing), length(unused)))]
+        }
+      }
+
+      if (all(!is.na(matched) & nzchar(matched))) {
+        return(stats::setNames(matched, keys))
+      }
+    }
+
+    values <- unname(pal)
+    values <- values[!is.na(values) & nzchar(values)]
+    if (length(values) == 0) return(NULL)
+
+    if (length(values) < length(keys)) {
+      values <- c(values, scales::hue_pal()(length(keys) - length(values)))
+    }
+
+    stats::setNames(values[seq_along(keys)], keys)
+  }
+
+  first_non_empty <- function(...) {
+    values <- list(...)
+    for (value in values) {
+      if (!is.null(value) && length(value) > 0) return(value)
+    }
+    NULL
+  }
+
+  palette_source <- first_non_empty(fill_values, palette_fill, palette)
+  legend_palette <- align_legend_palette(palette_source, legend_keys)
+
+  if (is.null(legend_palette)) {
+    fallback_colours <- c("#d6effc", "#0080a1", "#7cc688")
+    if (length(fallback_colours) < length(legend_keys)) {
+      fallback_colours <- c(
+        fallback_colours,
+        scales::hue_pal()(length(legend_keys) - length(fallback_colours))
+      )
+    }
+    legend_palette <- stats::setNames(fallback_colours[seq_along(legend_keys)], legend_keys)
+    legend_palette <- complete_palette(legend_keys, legend_palette)
+  }
+
+  fill_values <- legend_palette[fill_order]
+
+  mapped_point_colour <- legend_palette[[point_label]]
+  if (!is.null(mapped_point_colour) && length(mapped_point_colour) > 0 && !is.na(mapped_point_colour) && nzchar(mapped_point_colour)) {
+    point_colour <- unname(mapped_point_colour)
+  }
+
+  if (is.null(fill_labels)) {
+    fill_labels <- stats::setNames(legend_keys, legend_keys)
+  } else {
+    fill_labels <- complete_labels(legend_keys, fill_labels)
   }
   
   # =========================
@@ -123,8 +208,8 @@ plot_net_contribution <- function(
   
   legend_items <- tibble::tibble(
     legend_item = factor(
-      c(fill_order, point_label),
-      levels = c(fill_order, point_label)
+      legend_keys,
+      levels = legend_keys
     ),
     x = df[[group_name]][1],
     y = 0
@@ -178,8 +263,8 @@ plot_net_contribution <- function(
     
     scale_fill_manual(
       values = c(fill_values, setNames(point_colour, point_label)),
-      labels = c(fill_labels, setNames(point_label, point_label)),
-      breaks = c(fill_order, point_label),
+      labels = fill_labels[legend_keys],
+      breaks = legend_keys,
       drop = FALSE
     ) +
     

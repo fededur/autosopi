@@ -20,13 +20,15 @@ sopi_plot_protocol <- function() {
       "y_line_label",
       "col_label",
       "line_label",
-      "labels"
+      "labels",
+      "fill_labels",
+      "point_label"
     ),
     palettes = c("palette", "palette_fill", "palette_line"),
-    palette_aliases = c("fill_palette", "colour_palette"),
+    palette_aliases = c("fill_palette", "colour_palette", "fill_values"),
     style = c("family", "base_size"),
     style_aliases = c("fontsize"),
-    layout = c("col_position", "primary_axis", "sort_col", "sort_line", "sort_desc", "sort", "legend_order", "col_order", "line_order"),
+    layout = c("col_position", "primary_axis", "sort_col", "sort_line", "sort_desc", "sort", "legend_order", "fill_order", "col_order", "line_order"),
     axis_breaks = c(
       "primary_min_breaks",
       "primary_max_breaks",

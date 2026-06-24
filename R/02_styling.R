@@ -62,6 +62,38 @@ complete_palette <- function(categories, palette = NULL) {
   palette[categories]
 }
 
+complete_palette_by_position <- function(categories, palette = NULL) {
+  categories <- unique(as.character(categories))
+
+  if (is.null(palette) || length(palette) == 0) {
+    return(complete_palette(categories, palette))
+  }
+
+  palette <- as.character(palette)
+  out <- stats::setNames(rep(NA_character_, length(categories)), categories)
+
+  if (!is.null(names(palette)) && any(nzchar(names(palette)))) {
+    named <- palette[!is.na(names(palette)) & nzchar(names(palette))]
+    matched <- intersect(categories, names(named))
+    out[matched] <- named[matched]
+    pool <- unname(named[!names(named) %in% matched])
+  } else {
+    pool <- unname(palette)
+  }
+
+  pool <- pool[!is.na(pool) & nzchar(pool)]
+  missing <- is.na(out) | !nzchar(out)
+
+  if (any(missing)) {
+    if (length(pool) < sum(missing)) {
+      pool <- c(pool, scales::hue_pal()(sum(missing) - length(pool)))
+    }
+    out[missing] <- pool[seq_len(sum(missing))]
+  }
+
+  out
+}
+
 infer_date_frequency <- function(x) {
   dates <- sort(unique(as.Date(x[!is.na(x)])))
 

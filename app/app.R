@@ -583,6 +583,8 @@ chart_arg_registry <- function() {
     list(section = "labels", args = "y_line_label", id = "line_axis_label", type = "text", label = "Line axis label", default = ""),
     list(section = "labels", args = "line_label", id = "line_legend_label", type = "text", label = "Line legend label", default = ""),
     list(section = "labels", args = "labels", id = "legend_labels", type = "mapping", label = "Legend labels", default = ""),
+    list(section = "labels", args = "fill_labels", id = "fill_labels", type = "mapping", label = "Fill/point labels", default = ""),
+    list(section = "labels", args = "point_label", id = "point_label", type = "text", label = "Point label", default = ""),
     list(section = "advanced", args = "primary_min_breaks", id = "primary_min_breaks", type = "numeric", label = "Primary min breaks", default = 4, min = 2),
     list(section = "advanced", args = "primary_max_breaks", id = "primary_max_breaks", type = "numeric", label = "Primary max breaks", default = 6, min = 2),
     list(section = "advanced", args = "secondary_min_breaks", id = "secondary_min_breaks", type = "numeric", label = "Secondary min breaks", default = 4, min = 2),
@@ -599,9 +601,10 @@ chart_arg_registry <- function() {
     list(section = "advanced", args = "y_line_scale", id = "y_line_scale", type = "numeric", label = "Line value scale", default = 1, min = 0.000000001),
     list(section = "advanced", args = "sort_col", id = "sort_col", type = "select", label = "Sort columns", default = "none", choices = c("none", "asc", "desc")),
     list(section = "advanced", args = "sort_line", id = "sort_line", type = "select", label = "Sort lines", default = "none", choices = c("none", "asc", "desc")),
-    list(section = "advanced", args = "legend_order", id = "legend_order", type = "text", label = "Legend order", default = ""),
-    list(section = "advanced", args = "col_order", id = "col_order", type = "text", label = "Column order", default = ""),
-    list(section = "advanced", args = "line_order", id = "line_order", type = "text", label = "Line order", default = "")
+    list(section = "advanced", args = "sort", id = "sort_bars", type = "select", label = "Sort bars", default = "desc", choices = c("desc", "asc", "none")),
+    list(section = "advanced", args = "legend_order", id = "legend_order", type = "vector", label = "Legend order", default = ""),
+    list(section = "advanced", args = "col_order", id = "col_order", type = "vector", label = "Column order", default = ""),
+    list(section = "advanced", args = "line_order", id = "line_order", type = "vector", label = "Line order", default = "")
   )
 }
 
@@ -628,6 +631,10 @@ chart_entry_label <- function(entry, function_name) {
   
   if (identical(entry$id, "column_axis_label") && "y_col_label" %in% fn_args) {
     return("Column axis label")
+  }
+
+  if (identical(function_name, "plot_net_contribution") && identical(entry$id, "legend_labels")) {
+    return("Bar/category labels")
   }
   
   entry$label
@@ -680,6 +687,13 @@ render_chart_registry_entry <- function(entry, function_name, data = NULL) {
       tags$p(class = "sopi-note", "Optional. Use one label mapping per line: raw value = display label.")
     ))
   }
+
+  if (identical(entry$type, "vector")) {
+    return(tagList(
+      textInput(entry$id, label, value = entry$default %||% ""),
+      tags$p(class = "sopi-note", "Optional. Enter values separated by commas, in the order you want.")
+    ))
+  }
   
   textInput(entry$id, label, value = entry$default %||% "")
 }
@@ -719,6 +733,12 @@ collect_chart_registry_args <- function(input, function_name) {
     if (identical(entry$type, "mapping")) {
       value <- parse_named_mapping_text(value)
       if (is.null(value) || length(value) == 0) next
+    }
+
+    if (identical(entry$type, "vector")) {
+      value <- trimws(strsplit(as.character(value), ",", fixed = TRUE)[[1]])
+      value <- value[nzchar(value)]
+      if (length(value) == 0) next
     }
     
     for (arg_name in intersect(entry$args, fn_args)) {
@@ -1640,6 +1660,7 @@ build_plot <- function(input, data) {
   }
   
   args <- merge_args(args, collect_chart_registry_args(input, input$plot_function))
+  args$plot_function <- input$plot_function
   
   plot_args <- clean_plot_args(
     args = args,
@@ -1671,6 +1692,10 @@ plot_standard_exclusions <- function() {
   unique(c(
     sopi_plot_standard_arg_names(include_aliases = TRUE),
     "col_position",
+    "fill_values",
+    "fill_labels",
+    "fill_order",
+    "point_colour",
     "line_label",
     "col_label"
   ))
@@ -2030,6 +2055,21 @@ server <- function(input, output, session) {
     if (is.null(data)) {
       return(character())
     }
+
+    if (identical(input$plot_function, "plot_net_contribution")) {
+      driver_field <- input$driver_field
+      drivers <- if (!is_blank(driver_field) && driver_field %in% names(data)) {
+        unique(as.character(data[[driver_field]]))
+      } else {
+        c("Volumes", "Prices")
+      }
+      drivers <- drivers[!is.na(drivers) & nzchar(drivers)]
+      point_label <- input$point_label
+      if (is.null(point_label) || is_blank(point_label)) {
+        point_label <- "Net contribution"
+      }
+      return(unique(c(drivers, point_label)))
+    }
     
     if (
       identical(input$plot_function, "plot_monthly_descriptive") &&
@@ -2069,6 +2109,13 @@ server <- function(input, output, session) {
         metadata_resource = metadata_resource(),
         sector = input$sector
       )
+    } else if (identical(input$plot_function, "plot_net_contribution")) {
+      metadata_style <- style_from_metadata(
+        metadata_resource = metadata_resource(),
+        sector = input$sector
+      )
+
+      palette <- complete_palette_by_position(categories, metadata_style$palette)
     } else {
       metadata_style <- style_from_metadata(
         metadata_resource = metadata_resource(),
@@ -2156,6 +2203,9 @@ server <- function(input, output, session) {
             metadata_resource = metadata_resource(),
             sector = input$sector
           )
+        } else if (identical(input$plot_function, "plot_net_contribution")) {
+          metadata_style <- style_from_metadata(metadata_resource(), input$sector)
+          complete_palette_by_position(categories, metadata_style$palette)
         } else {
           style_from_metadata(metadata_resource(), input$sector, categories = categories)$palette
         }
