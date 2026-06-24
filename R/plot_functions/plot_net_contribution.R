@@ -179,6 +179,7 @@ plot_net_contribution <- function(
 
     fill_labels <- complete_labels(legend_keys, fill_labels)
   }
+  legend_labels <- unname(fill_labels[legend_keys])
   
   # =========================
   # ORDERING
@@ -294,7 +295,7 @@ plot_net_contribution <- function(
     
     scale_fill_manual(
       values = c(fill_values, setNames(point_colour, point_label)),
-      labels = fill_labels[legend_keys],
+      labels = legend_labels,
       breaks = legend_keys,
       drop = FALSE
     ) +

@@ -2114,10 +2114,6 @@ server <- function(input, output, session) {
       }
 
       current_value <- input$fill_labels
-      if (!is.null(current_value) && nzchar(trimws(current_value))) {
-        return()
-      }
-
       keys <- current_palette_categories()
       if (length(keys) == 0) {
         keys <- c("Volumes", "Prices", "Net contribution")
@@ -2130,10 +2126,28 @@ server <- function(input, output, session) {
         .default = keys
       )
 
+      default_mapping <- stats::setNames(values, keys)
+      current_mapping <- parse_named_mapping_text(current_value)
+      is_old_auto_mapping <- !is.null(current_mapping) &&
+        all(keys %in% names(current_mapping)) &&
+        all(unname(current_mapping[keys]) == keys)
+      is_current_default <- !is.null(current_mapping) &&
+        all(keys %in% names(current_mapping)) &&
+        all(unname(current_mapping[keys]) == unname(default_mapping[keys]))
+
+      if (
+        !is.null(current_value) &&
+          nzchar(trimws(current_value)) &&
+          !is_old_auto_mapping &&
+          !is_current_default
+      ) {
+        return()
+      }
+
       updateTextAreaInput(
         session,
         "fill_labels",
-        value = paste(paste(keys, values, sep = " = "), collapse = "\n")
+        value = paste(paste(keys, unname(default_mapping[keys]), sep = " = "), collapse = "\n")
       )
     },
     ignoreInit = FALSE
