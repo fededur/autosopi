@@ -182,6 +182,12 @@ plot_net_contribution <- function(
 
   fill_values <- legend_values[fill_order]
   point_colour <- unname(legend_values[[point_label]])
+  legend_display_keys <- legend_display_labels
+  legend_display_values <- stats::setNames(unname(legend_values), legend_display_keys)
+  scale_values <- c(
+    stats::setNames(unname(fill_values), fill_order),
+    legend_display_values
+  )
 
   groups <- as.character(unique(df[[group_name]]))
 
@@ -255,7 +261,7 @@ plot_net_contribution <- function(
   }
 
   legend_items <- tibble::tibble(
-    legend_item = factor(legend_keys, levels = legend_keys),
+    legend_item = factor(legend_display_keys, levels = legend_display_keys),
     x = df[[group_name]][1],
     y = 0
   )
@@ -302,9 +308,9 @@ plot_net_contribution <- function(
     ) +
 
     scale_fill_manual(
-      values = legend_values,
-      labels = stats::setNames(legend_display_labels, legend_keys),
-      breaks = legend_keys,
+      values = scale_values,
+      breaks = legend_display_keys,
+      labels = legend_display_keys,
       drop = FALSE
     ) +
 
@@ -342,7 +348,7 @@ plot_net_contribution <- function(
         override.aes = list(
           shape = c(rep(22, length(fill_order)), 21),
           size = c(rep(4, length(fill_order)), 3),
-          fill = unname(legend_values),
+          fill = unname(legend_display_values),
           colour = NA
         )
       )
