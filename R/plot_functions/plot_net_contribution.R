@@ -188,13 +188,13 @@ plot_net_contribution <- function(
   fill_display_labels <- stats::setNames(unname(fill_labels[fill_order]), fill_order)
   point_display_label <- point_label
   fill_values <- stats::setNames(unname(fill_values), fill_order)
-  legend_keys <- c(fill_order, point_label)
+  legend_keys <- c(unname(fill_display_labels), point_display_label)
   legend_values <- stats::setNames(c(unname(fill_values), point_colour), legend_keys)
-  legend_labels <- stats::setNames(c(unname(fill_display_labels), point_display_label), legend_keys)
-  df[[driver_name]] <- factor(df[[driver_name]], levels = fill_order)
+  df$.sopi_fill_label <- unname(fill_display_labels[as.character(df[[driver_name]])])
+  df$.sopi_fill_label <- factor(df$.sopi_fill_label, levels = unname(fill_display_labels))
 
   invalid_rows <- is.na(df[[group_name]]) |
-    is.na(df[[driver_name]]) |
+    is.na(df$.sopi_fill_label) |
     !is.finite(df[[y_name]]) |
     !is.finite(df[[total_name]])
 
@@ -282,7 +282,7 @@ plot_net_contribution <- function(
   }
 
   legend_items <- data.frame(
-    legend_item = factor(point_label, levels = legend_keys),
+    legend_item = factor(point_display_label, levels = legend_keys),
     x = df[[group_name]][1],
     y = 0
   )
@@ -294,7 +294,7 @@ plot_net_contribution <- function(
   p <- ggplot(df, aes(x = .data[[group_name]], y = .data[[y_name]])) +
     
     geom_col(
-      aes(fill = .data[[driver_name]]),
+      aes(fill = .data$.sopi_fill_label),
       width = col_width,
       show.legend = TRUE
     ) +
@@ -335,13 +335,7 @@ plot_net_contribution <- function(
     scale_fill_manual(
       values = legend_values,
       breaks = legend_keys,
-      labels = function(x) {
-        out <- unname(legend_labels[as.character(x)])
-        missing <- is.na(out) | !nzchar(out)
-        missing[is.na(missing)] <- TRUE
-        out[missing] <- as.character(x)[missing]
-        out
-      },
+      labels = legend_keys,
       drop = FALSE
     ) +
     
