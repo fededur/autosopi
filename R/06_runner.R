@@ -122,7 +122,7 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
   metadata_style <- style_from_metadata(
     metadata_resource = metadata_resource,
     sector = sector,
-    categories = palette_categories
+    categories = if (identical(plot_function, "plot_net_contribution")) NULL else palette_categories
   )
 
   metadata_label_style <- style_from_metadata(
@@ -148,7 +148,12 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
   }
 
   if (identical(plot_function, "plot_net_contribution") && is.null(args$fill_labels)) {
-    args$fill_labels <- metadata_style$labels
+    point_label <- args$point_label %||% "Net contribution"
+    args$fill_labels <- c(
+      "Volumes" = "Volume contribution",
+      "Prices" = "Price contribution"
+    )
+    args$fill_labels[[point_label]] <- point_label
   }
 
   if (!is.null(palette_categories)) {

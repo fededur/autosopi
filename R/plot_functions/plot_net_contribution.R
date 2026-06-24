@@ -54,6 +54,17 @@ plot_net_contribution <- function(
   y_name      <- rlang::as_string(y_sym)
   driver_name <- rlang::as_string(driver_sym)
   total_name  <- rlang::as_string(total_sym)
+
+  df[[driver_name]] <- dplyr::recode(
+    as.character(df[[driver_name]]),
+    "Volume" = "Volumes",
+    "volume" = "Volumes",
+    "Quantity" = "Volumes",
+    "quantity" = "Volumes",
+    "Price" = "Prices",
+    "price" = "Prices",
+    .default = as.character(df[[driver_name]])
+  )
   
   # =========================
   # LABELS
@@ -144,7 +155,12 @@ plot_net_contribution <- function(
   }
 
   if (is.null(fill_labels)) {
-    fill_labels <- stats::setNames(legend_keys, legend_keys)
+    default_fill_labels <- c(
+      "Volumes" = "Volume contribution",
+      "Prices" = "Price contribution"
+    )
+    default_fill_labels[[point_label]] <- point_label
+    fill_labels <- complete_labels(legend_keys, default_fill_labels)
   } else {
     fill_labels <- as.character(fill_labels)
 

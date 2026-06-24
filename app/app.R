@@ -2063,6 +2063,16 @@ server <- function(input, output, session) {
       } else {
         c("Volumes", "Prices")
       }
+      drivers <- dplyr::recode(
+        drivers,
+        "Volume" = "Volumes",
+        "volume" = "Volumes",
+        "Quantity" = "Volumes",
+        "quantity" = "Volumes",
+        "Price" = "Prices",
+        "price" = "Prices",
+        .default = drivers
+      )
       drivers <- drivers[!is.na(drivers) & nzchar(drivers)]
       point_label <- input$point_label
       if (is.null(point_label) || is_blank(point_label)) {
@@ -2113,10 +2123,17 @@ server <- function(input, output, session) {
         keys <- c("Volumes", "Prices", "Net contribution")
       }
 
+      values <- dplyr::recode(
+        keys,
+        "Volumes" = "Volume contribution",
+        "Prices" = "Price contribution",
+        .default = keys
+      )
+
       updateTextAreaInput(
         session,
         "fill_labels",
-        value = paste(paste(keys, keys, sep = " = "), collapse = "\n")
+        value = paste(paste(keys, values, sep = " = "), collapse = "\n")
       )
     },
     ignoreInit = FALSE
