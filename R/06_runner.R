@@ -149,8 +149,8 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
 
   if (identical(plot_function, "plot_net_contribution") && is.null(args$fill_labels)) {
     args$fill_labels <- c(
-      "Volumes" = "Volume contribution",
-      "Prices" = "Price contribution"
+      "Volume contribution" = "Volume contribution",
+      "Price contribution" = "Price contribution"
     )
   }
 
@@ -171,7 +171,7 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
   }
 
   if (identical(plot_function, "plot_net_contribution") && !is.null(args$fill_labels)) {
-    args$fill_labels <- complete_labels(c("Volumes", "Prices"), args$fill_labels)
+    args$fill_labels <- complete_labels(c("Volume contribution", "Price contribution"), args$fill_labels)
   }
 
   args

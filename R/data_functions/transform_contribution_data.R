@@ -4,7 +4,7 @@ transform_contribution_data <- function(
     time_var,
     revenue = NULL,
     quantity = NULL,
-    fill_order = c("Volumes", "Prices")
+    fill_order = c("Volume contribution", "Price contribution")
 ) {
   group <- as.character(group)
   time_var <- as.character(time_var)
@@ -75,8 +75,8 @@ transform_contribution_data <- function(
     mutate(
       driver = recode(
         driver,
-        price_pp = "Prices",
-        quantity_pp = "Volumes"
+        price_pp = "Price contribution",
+        quantity_pp = "Volume contribution"
       )
     ) %>%
     mutate(

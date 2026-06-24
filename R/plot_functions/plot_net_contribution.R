@@ -19,10 +19,15 @@ plot_net_contribution <- function(
 
     palette = NULL,
     palette_fill = NULL,
-    fill_values = c("Volumes" = "#d6effc", "Prices" = "#0080a1"),
-    fill_labels = c("Volumes" = "Volumes", "Prices" = "Prices"),
+    fill_values = c("Volume contribution" = "#d6effc", "Price contribution" = "#0080a1"),
+    fill_labels = c(
+      "Volumes" = "Volume contribution",
+      "Prices" = "Price contribution",
+      "Volume contribution" = "Volume contribution",
+      "Price contribution" = "Price contribution"
+    ),
     fill_label = NULL,
-    fill_order = c("Volumes", "Prices"),
+    fill_order = c("Volume contribution", "Price contribution"),
     col_width = 0.5,
 
     point_label = "Net contribution",
@@ -54,12 +59,14 @@ plot_net_contribution <- function(
 
   df[[driver_name]] <- dplyr::recode(
     as.character(df[[driver_name]]),
-    "Volume" = "Volumes",
-    "volume" = "Volumes",
-    "Quantity" = "Volumes",
-    "quantity" = "Volumes",
-    "Price" = "Prices",
-    "price" = "Prices",
+    "Volumes" = "Volume contribution",
+    "Volume" = "Volume contribution",
+    "volume" = "Volume contribution",
+    "Quantity" = "Volume contribution",
+    "quantity" = "Volume contribution",
+    "Prices" = "Price contribution",
+    "Price" = "Price contribution",
+    "price" = "Price contribution",
     .default = as.character(df[[driver_name]])
   )
 
@@ -67,31 +74,33 @@ plot_net_contribution <- function(
     fill_labels <- fill_label
   }
 
-  fill_order <- as.character(fill_order)
+  normalise_driver_names <- function(x) {
+    dplyr::recode(
+      as.character(x),
+      "Volumes" = "Volume contribution",
+      "Volume" = "Volume contribution",
+      "volume" = "Volume contribution",
+      "Quantity" = "Volume contribution",
+      "quantity" = "Volume contribution",
+      "Prices" = "Price contribution",
+      "Price" = "Price contribution",
+      "price" = "Price contribution",
+      .default = as.character(x)
+    )
+  }
+
+  fill_order <- normalise_driver_names(fill_order)
   fill_order <- fill_order[nzchar(fill_order)]
   fill_order <- unique(fill_order)
 
   if (!is.null(legend_order)) {
-    legend_order <- as.character(legend_order)
+    legend_order <- normalise_driver_names(legend_order)
     legend_order <- legend_order[nzchar(legend_order)]
     fill_order <- setdiff(legend_order, point_label)
   }
 
   if (length(fill_order) == 0) {
     fill_order <- unique(as.character(df[[driver_name]]))
-  }
-
-  normalise_driver_names <- function(x) {
-    dplyr::recode(
-      as.character(x),
-      "Volume" = "Volumes",
-      "volume" = "Volumes",
-      "Quantity" = "Volumes",
-      "quantity" = "Volumes",
-      "Price" = "Prices",
-      "price" = "Prices",
-      .default = as.character(x)
-    )
   }
 
   normalise_named_vector <- function(x) {

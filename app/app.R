@@ -678,7 +678,7 @@ render_chart_registry_entry <- function(entry, function_name, data = NULL) {
   if (identical(entry$type, "mapping")) {
     default <- entry$default %||% ""
     if (identical(function_name, "plot_net_contribution") && identical(entry$id, "net_contribution_fill_labels")) {
-      default <- "Volumes = Volume contribution\nPrices = Price contribution"
+      default <- "Volume contribution = Volume contribution\nPrice contribution = Price contribution"
     }
 
     return(tagList(
@@ -2084,12 +2084,14 @@ server <- function(input, output, session) {
       }
       drivers <- dplyr::recode(
         drivers,
-        "Volume" = "Volumes",
-        "volume" = "Volumes",
-        "Quantity" = "Volumes",
-        "quantity" = "Volumes",
-        "Price" = "Prices",
-        "price" = "Prices",
+        "Volumes" = "Volume contribution",
+        "Volume" = "Volume contribution",
+        "volume" = "Volume contribution",
+        "Quantity" = "Volume contribution",
+        "quantity" = "Volume contribution",
+        "Prices" = "Price contribution",
+        "Price" = "Price contribution",
+        "price" = "Price contribution",
         .default = drivers
       )
       drivers <- drivers[!is.na(drivers) & nzchar(drivers)]
@@ -2097,12 +2099,14 @@ server <- function(input, output, session) {
       if (!is.null(fill_labels) && length(fill_labels) > 0) {
         names(fill_labels) <- dplyr::recode(
           names(fill_labels),
-          "Volume" = "Volumes",
-          "volume" = "Volumes",
-          "Quantity" = "Volumes",
-          "quantity" = "Volumes",
-          "Price" = "Prices",
-          "price" = "Prices",
+          "Volumes" = "Volume contribution",
+          "Volume" = "Volume contribution",
+          "volume" = "Volume contribution",
+          "Quantity" = "Volume contribution",
+          "quantity" = "Volume contribution",
+          "Prices" = "Price contribution",
+          "Price" = "Price contribution",
+          "price" = "Price contribution",
           .default = names(fill_labels)
         )
         driver_labels <- fill_labels[drivers]
