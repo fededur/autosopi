@@ -583,7 +583,6 @@ chart_arg_registry <- function() {
     list(section = "labels", args = "y_line_label", id = "line_axis_label", type = "text", label = "Line axis label", default = ""),
     list(section = "labels", args = "line_label", id = "line_legend_label", type = "text", label = "Line legend label", default = ""),
     list(section = "labels", args = "labels", id = "legend_labels", type = "mapping", label = "Legend labels", default = ""),
-    list(section = "labels", args = c("fill_labels", "fill_label"), id = "net_contribution_fill_labels", type = "mapping", label = "Bar fill labels", default = ""),
     list(section = "labels", args = "point_label", id = "point_label", type = "text", label = "Point label", default = ""),
     list(section = "advanced", args = "primary_min_breaks", id = "primary_min_breaks", type = "numeric", label = "Primary min breaks", default = 4, min = 2),
     list(section = "advanced", args = "primary_max_breaks", id = "primary_max_breaks", type = "numeric", label = "Primary max breaks", default = 6, min = 2),
@@ -677,9 +676,6 @@ render_chart_registry_entry <- function(entry, function_name, data = NULL) {
   
   if (identical(entry$type, "mapping")) {
     default <- entry$default %||% ""
-    if (identical(function_name, "plot_net_contribution") && identical(entry$id, "net_contribution_fill_labels")) {
-      default <- "Volume contribution = Volume contribution\nPrice contribution = Price contribution"
-    }
 
     return(tagList(
       textAreaInput(
@@ -1426,13 +1422,6 @@ build_plot_args_config <- function(input, plot_id) {
   }
   
   args <- merge_args(args, collect_chart_registry_args(input, input$plot_function))
-  if (identical(input$plot_function, "plot_net_contribution")) {
-    fill_labels <- parse_named_mapping_text(input$net_contribution_fill_labels)
-    if (!is.null(fill_labels) && length(fill_labels) > 0) {
-      args$fill_labels <- fill_labels
-      args$fill_label <- fill_labels
-    }
-  }
   args$width <- input$width
   args$height <- input$height
   
@@ -1672,13 +1661,6 @@ build_plot <- function(input, data) {
   }
   
   args <- merge_args(args, collect_chart_registry_args(input, input$plot_function))
-  if (identical(input$plot_function, "plot_net_contribution")) {
-    fill_labels <- parse_named_mapping_text(input$net_contribution_fill_labels)
-    if (!is.null(fill_labels) && length(fill_labels) > 0) {
-      args$fill_labels <- fill_labels
-      args$fill_label <- fill_labels
-    }
-  }
   args$plot_function <- input$plot_function
   
   plot_args <- clean_plot_args(
@@ -2095,24 +2077,6 @@ server <- function(input, output, session) {
         .default = drivers
       )
       drivers <- drivers[!is.na(drivers) & nzchar(drivers)]
-      fill_labels <- parse_named_mapping_text(input$net_contribution_fill_labels)
-      if (!is.null(fill_labels) && length(fill_labels) > 0) {
-        names(fill_labels) <- dplyr::recode(
-          names(fill_labels),
-          "Volumes" = "Volume contribution",
-          "Volume" = "Volume contribution",
-          "volume" = "Volume contribution",
-          "Quantity" = "Volume contribution",
-          "quantity" = "Volume contribution",
-          "Prices" = "Price contribution",
-          "Price" = "Price contribution",
-          "price" = "Price contribution",
-          .default = names(fill_labels)
-        )
-        driver_labels <- fill_labels[drivers]
-        driver_labels[is.na(driver_labels) | !nzchar(driver_labels)] <- drivers[is.na(driver_labels) | !nzchar(driver_labels)]
-        drivers <- unname(driver_labels)
-      }
       point_label <- input$point_label
       if (is.null(point_label) || is_blank(point_label)) {
         point_label <- "Net contribution"
