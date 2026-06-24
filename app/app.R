@@ -567,12 +567,12 @@ safe_input_id <- function(prefix, arg_name) {
 chart_arg_registry <- function() {
   list(
     list(section = "fields", args = c("x", "date_var"), id = "x_field", type = "field", label = "X/date/year field", optional = FALSE, match = ""),
-    list(section = "fields", args = "group", id = "group_field", type = "field", label = "Group/category field", optional = TRUE, match = "group"),
+    list(section = "fields", args = "group", id = "group_field", type = "field", label = "Group/category field", optional = TRUE, match = "category|group"),
     list(section = "fields", args = "y_col", id = "column_value", type = "field", label = "Column/bar value", optional = TRUE, match = "revenue|value"),
-    list(section = "fields", args = "y", id = "column_value", type = "field", label = "Y value", optional = FALSE, match = "revenue|value"),
+    list(section = "fields", args = "y", id = "column_value", type = "field", label = "Y value", optional = FALSE, match = "contribution|revenue|value"),
     list(section = "fields", args = "y_line", id = "line_value", type = "field", label = "Line value", optional = TRUE, match = "volume"),
     list(section = "fields", args = "driver", id = "driver_field", type = "field", label = "Driver field", optional = FALSE, match = "driver"),
-    list(section = "fields", args = "total", id = "total_field", type = "field", label = "Total field", optional = FALSE, match = "total"),
+    list(section = "fields", args = "total", id = "total_field", type = "field", label = "Net contribution", optional = FALSE, match = "net_contribution|total"),
     list(section = "options", args = "forecast", id = "forecast", type = "checkbox", label = "Show forecast shading", default = FALSE),
     list(section = "options", args = "forecast_start", id = "forecast_start_year", type = "numeric", label = "Forecast start year", default = NA_real_, min = 1990),
     list(section = "options", args = "forecast_end", id = "forecast_end_year", type = "numeric", label = "Forecast end year", default = NA_real_, min = 1990),
@@ -788,6 +788,18 @@ time_field_choices <- function(data) {
   unique(c(time_like, period_like, names(data)))
 }
 
+numeric_field_choices <- function(data) {
+  if (is.null(data)) return(character())
+  names(data)[vapply(data, function(column) {
+    is.numeric(column) || is.integer(column)
+  }, logical(1))]
+}
+
+first_matching_choice <- function(choices, pattern) {
+  matches <- choices[grepl(pattern, choices, ignore.case = TRUE)]
+  if (length(matches) == 0) "" else matches[[1]]
+}
+
 transform_field_input <- function(function_name, arg, id, data = NULL) {
   if (!grepl("^transform_.*_data$", function_name)) {
     return(NULL)
@@ -804,6 +816,18 @@ transform_field_input <- function(function_name, arg, id, data = NULL) {
     choices <- time_field_choices(data)
     selected <- if (length(choices) > 0) choices[[1]] else ""
     return(selectInput(id, "Time column", choices = choices, selected = selected))
+  }
+
+  if (identical(function_name, "transform_contribution_data") && identical(arg, "revenue")) {
+    choices <- c("Auto detect" = "", numeric_field_choices(data))
+    selected <- first_matching_choice(choices, "^(export[ _.-]*)?(revenue|value)$|export[ _.-]*(revenue|value)")
+    return(selectInput(id, "Revenue/value column", choices = choices, selected = selected))
+  }
+
+  if (identical(function_name, "transform_contribution_data") && identical(arg, "quantity")) {
+    choices <- c("Auto detect" = "", numeric_field_choices(data))
+    selected <- first_matching_choice(choices, "^(export[ _.-]*)?(quantity|volume)$|export[ _.-]*(quantity|volume)")
+    return(selectInput(id, "Quantity/volume column", choices = choices, selected = selected))
   }
 
   NULL
@@ -1771,7 +1795,8 @@ ui <- fluidPage(
               choices = c("None" = "none", transform_function_names),
               selected = "none"
             ),
-            uiOutput("transform_function_args")
+            uiOutput("transform_function_args"),
+            actionButton("transform_data", "Transform Data", class = "btn-primary")
           )
         ),
         column(
@@ -2324,12 +2349,18 @@ server <- function(input, output, session) {
     )
   })
   
-  source_data <- eventReactive(input$load_data, {
-    build_source_data(input)
+  source_data <- reactiveVal(NULL)
+  loaded_data <- reactiveVal(NULL)
+
+  observeEvent(input$load_data, {
+    data <- build_source_data(input)
+    source_data(data)
+    loaded_data(data)
   })
 
-  loaded_data <- reactive({
-    build_transformed_data(input, source_data())
+  observeEvent(input$transform_data, {
+    req(source_data())
+    loaded_data(build_transformed_data(input, source_data()))
   })
   
   output$data_status <- renderPrint({

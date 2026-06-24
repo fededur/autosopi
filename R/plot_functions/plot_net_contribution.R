@@ -1,9 +1,9 @@
 plot_net_contribution <- function(
     data,
-    group,
-    y,
-    driver,
-    total,
+    group = "category",
+    y = "contribution",
+    driver = "driver",
+    total = "net_contribution",
     
     sort = c("desc", "asc", "none"),
     other_match = c("all other", "other", "rest"),
