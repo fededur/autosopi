@@ -22,6 +22,7 @@ sopi_plot_protocol <- function() {
       "line_label",
       "labels",
       "fill_labels",
+      "fill_label",
       "point_label"
     ),
     palettes = c("palette", "palette_fill", "palette_line"),

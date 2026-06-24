@@ -583,7 +583,7 @@ chart_arg_registry <- function() {
     list(section = "labels", args = "y_line_label", id = "line_axis_label", type = "text", label = "Line axis label", default = ""),
     list(section = "labels", args = "line_label", id = "line_legend_label", type = "text", label = "Line legend label", default = ""),
     list(section = "labels", args = "labels", id = "legend_labels", type = "mapping", label = "Legend labels", default = ""),
-    list(section = "labels", args = "fill_labels", id = "net_contribution_fill_labels", type = "mapping", label = "Legend labels (fill_labels)", default = ""),
+    list(section = "labels", args = c("fill_labels", "fill_label"), id = "net_contribution_fill_labels", type = "mapping", label = "Bar fill labels", default = ""),
     list(section = "labels", args = "point_label", id = "point_label", type = "text", label = "Point label", default = ""),
     list(section = "advanced", args = "primary_min_breaks", id = "primary_min_breaks", type = "numeric", label = "Primary min breaks", default = 4, min = 2),
     list(section = "advanced", args = "primary_max_breaks", id = "primary_max_breaks", type = "numeric", label = "Primary max breaks", default = 6, min = 2),
@@ -678,7 +678,7 @@ render_chart_registry_entry <- function(entry, function_name, data = NULL) {
   if (identical(entry$type, "mapping")) {
     default <- entry$default %||% ""
     if (identical(function_name, "plot_net_contribution") && identical(entry$id, "net_contribution_fill_labels")) {
-      default <- "Volumes = Volume contribution\nPrices = Price contribution\nNet contribution = Net contribution"
+      default <- "Volumes = Volume contribution\nPrices = Price contribution"
     }
 
     return(tagList(

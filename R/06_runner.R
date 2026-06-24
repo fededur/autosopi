@@ -148,12 +148,10 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
   }
 
   if (identical(plot_function, "plot_net_contribution") && is.null(args$fill_labels)) {
-    point_label <- args$point_label %||% "Net contribution"
     args$fill_labels <- c(
       "Volumes" = "Volume contribution",
       "Prices" = "Price contribution"
     )
-    args$fill_labels[[point_label]] <- point_label
   }
 
   if (!is.null(palette_categories)) {
@@ -172,8 +170,8 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
     args$labels <- complete_labels(label_categories, args$labels)
   }
 
-  if (identical(plot_function, "plot_net_contribution") && !is.null(palette_categories)) {
-    args$fill_labels <- complete_labels(palette_categories, args$fill_labels)
+  if (identical(plot_function, "plot_net_contribution") && !is.null(args$fill_labels)) {
+    args$fill_labels <- complete_labels(c("Volumes", "Prices"), args$fill_labels)
   }
 
   args

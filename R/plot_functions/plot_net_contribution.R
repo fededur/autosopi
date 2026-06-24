@@ -22,9 +22,9 @@ plot_net_contribution <- function(
     fill_values = NULL,
     fill_labels = c(
       "Volumes" = "Volume contribution",
-      "Prices" = "Price contribution",
-      "Net contribution" = "Net contribution"
+      "Prices" = "Price contribution"
     ),
+    fill_label = NULL,
     fill_order  = c("Volumes", "Prices"),
     col_width = 0.5,
     
@@ -158,13 +158,15 @@ plot_net_contribution <- function(
     point_colour <- unname(mapped_point_colour)
   }
 
+  if (!is.null(fill_label)) {
+    fill_labels <- fill_label
+  }
+
   if (is.null(fill_labels)) {
-    default_fill_labels <- c(
+    fill_labels <- c(
       "Volumes" = "Volume contribution",
       "Prices" = "Price contribution"
     )
-    default_fill_labels[[point_label]] <- point_label
-    fill_labels <- complete_labels(legend_keys, default_fill_labels)
   } else {
     fill_labels <- as.character(fill_labels)
 
@@ -180,18 +182,17 @@ plot_net_contribution <- function(
         .default = names(fill_labels)
       )
     }
-
-    fill_labels <- complete_labels(legend_keys, fill_labels)
   }
-  legend_labels <- stats::setNames(unname(fill_labels[legend_keys]), legend_keys)
-  fill_display_labels <- unname(legend_labels[fill_order])
-  point_display_label <- unname(legend_labels[[point_label]])
+
+  fill_labels <- complete_labels(fill_order, fill_labels)
+  fill_display_labels <- unname(fill_labels[fill_order])
+  point_display_label <- point_label
   legend_display_keys <- c(fill_display_labels, point_display_label)
   legend_display_values <- stats::setNames(
     c(unname(fill_values), point_colour),
     legend_display_keys
   )
-  df$.sopi_driver_label <- unname(legend_labels[as.character(df[[driver_name]])])
+  df$.sopi_driver_label <- unname(fill_labels[as.character(df[[driver_name]])])
   df[[driver_name]] <- factor(df$.sopi_driver_label, levels = fill_display_labels)
 
   invalid_rows <- is.na(df[[group_name]]) |
