@@ -180,11 +180,28 @@ plot_net_contribution <- function(
     fill_labels <- complete_labels(legend_keys, fill_labels)
   }
   legend_labels <- stats::setNames(unname(fill_labels[legend_keys]), legend_keys)
-  legend_display_keys <- unname(legend_labels[legend_keys])
+  fill_display_labels <- unname(legend_labels[fill_order])
+  point_display_label <- unname(legend_labels[[point_label]])
+  legend_display_keys <- c(fill_display_labels, point_display_label)
   legend_display_values <- stats::setNames(
     c(unname(fill_values), point_colour),
     legend_display_keys
   )
+  df$.sopi_driver_label <- unname(legend_labels[as.character(df[[driver_name]])])
+
+  invalid_rows <- is.na(df[[group_name]]) |
+    is.na(df[[driver_name]]) |
+    !is.finite(df[[y_name]]) |
+    !is.finite(df[[total_name]])
+
+  if (any(invalid_rows)) {
+    stop(
+      "plot_net_contribution() cannot plot rows with missing category/driver values or non-finite contribution/net contribution values. ",
+      "Problem rows: ",
+      paste(which(invalid_rows), collapse = ", "),
+      call. = FALSE
+    )
+  }
   
   # =========================
   # ORDERING
@@ -217,7 +234,27 @@ plot_net_contribution <- function(
   # AXIS
   # =========================
   
-  max_val <- max(abs(c(df[[y_name]], df[[total_name]])), na.rm = TRUE)
+  stacked_extent <- df |>
+    dplyr::group_by(.data[[group_name]]) |>
+    dplyr::summarise(
+      positive_stack = sum(dplyr::if_else(.data[[y_name]] > 0, .data[[y_name]], 0), na.rm = TRUE),
+      negative_stack = sum(dplyr::if_else(.data[[y_name]] < 0, .data[[y_name]], 0), na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  max_val <- max(
+    abs(c(
+      df[[y_name]],
+      df[[total_name]],
+      stacked_extent$positive_stack,
+      stacked_extent$negative_stack
+    )),
+    na.rm = TRUE
+  )
+
+  if (!is.finite(max_val)) {
+    stop("plot_net_contribution() could not calculate an axis range from the data.", call. = FALSE)
+  }
   
   if (is.null(x_limits)) {
     n_total <- max(3, n_breaks)
@@ -234,6 +271,7 @@ plot_net_contribution <- function(
     }
     
   } else {
+    x_limits <- range(c(x_limits, -max_val, max_val), finite = TRUE)
     if (is.null(x_breaks)) {
       x_breaks <- seq(x_limits[1], x_limits[2], length.out = n_breaks)
     }
@@ -259,7 +297,7 @@ plot_net_contribution <- function(
   p <- ggplot(df, aes(x = .data[[group_name]], y = .data[[y_name]])) +
     
     geom_col(
-      aes(fill = .data[[driver_name]]),
+      aes(fill = .data[[".sopi_driver_label"]]),
       width = col_width,
       show.legend = FALSE
     ) +
@@ -285,10 +323,9 @@ plot_net_contribution <- function(
       show.legend = TRUE
     ) +
     
-    coord_flip(clip = "off") +
+    coord_flip(ylim = x_limits, clip = "off") +
     
     scale_y_continuous(
-      limits = x_limits,
       breaks = x_breaks,
       labels = scales::label_number(
         accuracy = y_accuracy,
@@ -299,11 +336,7 @@ plot_net_contribution <- function(
     ) +
     
     scale_fill_manual(
-      values = c(
-        fill_values,
-        setNames(point_colour, point_label),
-        legend_display_values
-      ),
+      values = legend_display_values,
       breaks = legend_display_keys,
       drop = FALSE
     ) +
