@@ -192,6 +192,7 @@ plot_net_contribution <- function(
     legend_display_keys
   )
   df$.sopi_driver_label <- unname(legend_labels[as.character(df[[driver_name]])])
+  df[[driver_name]] <- factor(df$.sopi_driver_label, levels = fill_display_labels)
 
   invalid_rows <- is.na(df[[group_name]]) |
     is.na(df[[driver_name]]) |
@@ -301,7 +302,7 @@ plot_net_contribution <- function(
   p <- ggplot(df, aes(x = .data[[group_name]], y = .data[[y_name]])) +
     
     geom_col(
-      aes(fill = .data[[".sopi_driver_label"]]),
+      aes(fill = .data[[driver_name]]),
       width = col_width,
       show.legend = FALSE
     ) +
