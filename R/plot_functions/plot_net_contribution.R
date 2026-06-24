@@ -288,7 +288,7 @@ plot_net_contribution <- function(
   
   legend_items <- tibble::tibble(
     legend_item = factor(
-      legend_display_keys,
+      point_display_label,
       levels = legend_display_keys
     ),
     x = df[[group_name]][1],
@@ -304,7 +304,7 @@ plot_net_contribution <- function(
     geom_col(
       aes(fill = .data[[driver_name]]),
       width = col_width,
-      show.legend = FALSE
+      show.legend = TRUE
     ) +
     
     geom_hline(yintercept = 0, linewidth = 0.25, colour = "#dad9d9") +
@@ -343,6 +343,7 @@ plot_net_contribution <- function(
     scale_fill_manual(
       values = legend_display_values,
       breaks = legend_display_keys,
+      labels = legend_display_keys,
       drop = FALSE
     ) +
     

@@ -1944,7 +1944,6 @@ ui <- fluidPage(
             h4("Preview"),
             actionButton("refresh_preview", "Refresh Preview", class = "btn-primary"),
             tags$p(class = "sopi-note", "Click after changing chart parameters or SVG size to rebuild the visual preview."),
-            verbatimTextOutput("plot_argument_debug"),
             uiOutput("chart_preview_ui")
           )
         ),
@@ -2509,16 +2508,6 @@ server <- function(input, output, session) {
   
   output$chart_preview_ui <- renderUI({
     plotOutput("chart_preview", height = paste0(preview_height_px(), "px"))
-  })
-
-  output$plot_argument_debug <- renderPrint({
-    if (!identical(input$plot_function, "plot_net_contribution")) {
-      return(invisible(NULL))
-    }
-
-    args <- collect_chart_registry_args(input, input$plot_function)
-    cat("plot_net_contribution label arguments sent to plot:\n")
-    print(args[intersect(c("fill_labels", "legend_order", "point_label"), names(args))])
   })
   
   output$chart_preview <- renderPlot({
