@@ -180,6 +180,11 @@ plot_net_contribution <- function(
     fill_labels <- complete_labels(legend_keys, fill_labels)
   }
   legend_labels <- stats::setNames(unname(fill_labels[legend_keys]), legend_keys)
+  legend_display_keys <- unname(legend_labels[legend_keys])
+  legend_display_values <- stats::setNames(
+    c(unname(fill_values), point_colour),
+    legend_display_keys
+  )
   
   # =========================
   # ORDERING
@@ -240,8 +245,8 @@ plot_net_contribution <- function(
   
   legend_items <- tibble::tibble(
     legend_item = factor(
-      legend_keys,
-      levels = legend_keys
+      legend_display_keys,
+      levels = legend_display_keys
     ),
     x = df[[group_name]][1],
     y = 0
@@ -294,9 +299,12 @@ plot_net_contribution <- function(
     ) +
     
     scale_fill_manual(
-      values = c(fill_values, setNames(point_colour, point_label)),
-      labels = legend_labels,
-      breaks = legend_keys,
+      values = c(
+        fill_values,
+        setNames(point_colour, point_label),
+        legend_display_values
+      ),
+      breaks = legend_display_keys,
       drop = FALSE
     ) +
     

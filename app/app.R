@@ -583,7 +583,7 @@ chart_arg_registry <- function() {
     list(section = "labels", args = "y_line_label", id = "line_axis_label", type = "text", label = "Line axis label", default = ""),
     list(section = "labels", args = "line_label", id = "line_legend_label", type = "text", label = "Line legend label", default = ""),
     list(section = "labels", args = "labels", id = "legend_labels", type = "mapping", label = "Legend labels", default = ""),
-    list(section = "labels", args = "fill_labels", id = "fill_labels", type = "mapping", label = "Fill/point labels", default = ""),
+    list(section = "labels", args = "fill_labels", id = "fill_labels", type = "mapping", label = "Fill labels", default = ""),
     list(section = "labels", args = "point_label", id = "point_label", type = "text", label = "Point label", default = ""),
     list(section = "advanced", args = "primary_min_breaks", id = "primary_min_breaks", type = "numeric", label = "Primary min breaks", default = 4, min = 2),
     list(section = "advanced", args = "primary_max_breaks", id = "primary_max_breaks", type = "numeric", label = "Primary max breaks", default = 6, min = 2),
