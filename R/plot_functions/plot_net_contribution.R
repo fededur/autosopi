@@ -4,60 +4,53 @@ plot_net_contribution <- function(
     y = "contribution",
     driver = "driver",
     total = "net_contribution",
-    
+
     sort = c("desc", "asc", "none"),
     other_match = c("all other", "other", "rest"),
-    
+
     labels = NULL,
     legend_order = NULL,
-    
+
     x_limits = NULL,
     x_breaks = NULL,
     n_breaks = 5,
-    
+
     y_accuracy = 0.1,
-    
+
     palette = NULL,
     palette_fill = NULL,
-    fill_values = NULL,
-    fill_labels = c(
-      "Volumes" = "Volume contribution",
-      "Prices" = "Price contribution"
-    ),
+    fill_values = c("Volumes" = "#d6effc", "Prices" = "#0080a1"),
+    fill_labels = c("Volumes" = "Volumes", "Prices" = "Prices"),
     fill_label = NULL,
-    fill_order  = c("Volumes", "Prices"),
+    fill_order = c("Volumes", "Prices"),
     col_width = 0.5,
-    
-    point_label  = "Net contribution",
+
+    point_label = "Net contribution",
     point_colour = "#7cc688",
-    point_size   = 2.5,
-    
+    point_size = 2.5,
+
     title = NULL,
     subtitle = NULL,
     x_label = "Contribution to export revenue growth",
     y_label = NULL,
-    
+
     family = "DIN",
     fontsize = 10,
     legend = TRUE
 ) {
-  
+
   sort <- match.arg(sort)
   df <- data
-  
-  # =========================
-  # RLING CAPTURE
-  # =========================
-  
-  group_sym  <- rlang::ensym(group)
-  y_sym      <- rlang::ensym(y)
+
+  group_sym <- rlang::ensym(group)
+  y_sym <- rlang::ensym(y)
   driver_sym <- rlang::ensym(driver)
-  total_sym  <- rlang::ensym(total)
-  
-  group_name  <- rlang::as_string(group_sym)
-  y_name      <- rlang::as_string(y_sym)
+  total_sym <- rlang::ensym(total)
+
+  group_name <- rlang::as_string(group_sym)
+  y_name <- rlang::as_string(y_sym)
   driver_name <- rlang::as_string(driver_sym)
-  total_name  <- rlang::as_string(total_sym)
+  total_name <- rlang::as_string(total_sym)
 
   df[[driver_name]] <- dplyr::recode(
     as.character(df[[driver_name]]),
@@ -69,64 +62,53 @@ plot_net_contribution <- function(
     "price" = "Prices",
     .default = as.character(df[[driver_name]])
   )
-  
-  # =========================
-  # LABELS
-  # =========================
-  
-  groups <- as.character(unique(df[[group_name]]))
-  
-  if (!is.null(labels)) {
-    mapped <- labels[groups]
-    mapped[is.na(mapped)] <- groups[is.na(mapped)]
-    df[[group_name]] <- factor(df[[group_name]], levels = groups, labels = mapped)
-  }
 
-  if (!is.null(legend_order)) {
-    fill_order <- setdiff(as.character(legend_order), point_label)
+  if (!is.null(fill_label)) {
+    fill_labels <- fill_label
   }
 
   fill_order <- as.character(fill_order)
   fill_order <- fill_order[nzchar(fill_order)]
   fill_order <- unique(fill_order)
+
+  if (!is.null(legend_order)) {
+    legend_order <- as.character(legend_order)
+    legend_order <- legend_order[nzchar(legend_order)]
+    fill_order <- setdiff(legend_order, point_label)
+  }
+
   if (length(fill_order) == 0) {
     fill_order <- unique(as.character(df[[driver_name]]))
   }
 
-  legend_keys <- c(fill_order, point_label)
-
-  align_legend_palette <- function(pal, keys) {
-    if (is.null(pal) || length(pal) == 0) return(NULL)
-
-    pal <- as.character(pal)
-    if (!is.null(names(pal)) && any(nzchar(names(pal)))) {
-      named <- pal[!is.na(names(pal)) & nzchar(names(pal))]
-      matched <- named[keys]
-      missing <- is.na(matched) | !nzchar(matched)
-
-      if (any(missing)) {
-        unused <- unname(named[!names(named) %in% keys])
-        unused <- unused[!is.na(unused) & nzchar(unused)]
-        if (length(unused) > 0) {
-          matched[missing] <- unused[seq_len(min(sum(missing), length(unused)))]
-        }
-      }
-
-      if (all(!is.na(matched) & nzchar(matched))) {
-        return(stats::setNames(matched, keys))
-      }
-    }
-
-    values <- unname(pal)
-    values <- values[!is.na(values) & nzchar(values)]
-    if (length(values) == 0) return(NULL)
-
-    if (length(values) < length(keys)) {
-      values <- c(values, scales::hue_pal()(length(keys) - length(values)))
-    }
-
-    stats::setNames(values[seq_along(keys)], keys)
+  normalise_driver_names <- function(x) {
+    dplyr::recode(
+      as.character(x),
+      "Volume" = "Volumes",
+      "volume" = "Volumes",
+      "Quantity" = "Volumes",
+      "quantity" = "Volumes",
+      "Price" = "Prices",
+      "price" = "Prices",
+      .default = as.character(x)
+    )
   }
+
+  normalise_named_vector <- function(x) {
+    if (is.null(x) || length(x) == 0) return(x)
+    x <- as.character(x)
+    if (!is.null(names(x)) && any(nzchar(names(x)))) {
+      names(x) <- normalise_driver_names(names(x))
+    }
+    x
+  }
+
+  fill_labels <- normalise_named_vector(fill_labels)
+  fill_labels <- complete_labels(fill_order, fill_labels)
+
+  fill_display_labels <- stats::setNames(unname(fill_labels[fill_order]), fill_order)
+  legend_keys <- c(fill_order, point_label)
+  legend_display_labels <- c(unname(fill_display_labels), point_label)
 
   first_non_empty <- function(...) {
     values <- list(...)
@@ -136,108 +118,100 @@ plot_net_contribution <- function(
     NULL
   }
 
-  palette_source <- first_non_empty(fill_values, palette_fill, palette)
-  legend_palette <- align_legend_palette(palette_source, legend_keys)
-
-  if (is.null(legend_palette)) {
-    fallback_colours <- c("#d6effc", "#0080a1", "#7cc688")
-    if (length(fallback_colours) < length(legend_keys)) {
-      fallback_colours <- c(
-        fallback_colours,
-        scales::hue_pal()(length(legend_keys) - length(fallback_colours))
-      )
+  align_combined_palette <- function(pal, raw_keys, display_labels, fallback) {
+    if (is.null(pal) || length(pal) == 0) {
+      return(stats::setNames(fallback[seq_along(raw_keys)], raw_keys))
     }
-    legend_palette <- stats::setNames(fallback_colours[seq_along(legend_keys)], legend_keys)
-    legend_palette <- complete_palette(legend_keys, legend_palette)
-  }
 
-  fill_values <- legend_palette[fill_order]
-
-  mapped_point_colour <- legend_palette[[point_label]]
-  if (!is.null(mapped_point_colour) && length(mapped_point_colour) > 0 && !is.na(mapped_point_colour) && nzchar(mapped_point_colour)) {
-    point_colour <- unname(mapped_point_colour)
-  }
-
-  if (!is.null(fill_label)) {
-    fill_labels <- fill_label
-  }
-
-  if (is.null(fill_labels)) {
-    fill_labels <- c(
-      "Volumes" = "Volume contribution",
-      "Prices" = "Price contribution"
-    )
-  } else {
-    fill_labels <- as.character(fill_labels)
-
-    if (!is.null(names(fill_labels)) && any(nzchar(names(fill_labels)))) {
-      names(fill_labels) <- dplyr::recode(
-        names(fill_labels),
-        "Volume" = "Volumes",
-        "volume" = "Volumes",
-        "Quantity" = "Volumes",
-        "quantity" = "Volumes",
-        "Price" = "Prices",
-        "price" = "Prices",
-        .default = names(fill_labels)
-      )
+    pal <- as.character(pal)
+    pal <- pal[!is.na(pal) & nzchar(pal)]
+    if (length(pal) == 0) {
+      return(stats::setNames(fallback[seq_along(raw_keys)], raw_keys))
     }
+
+    out <- stats::setNames(rep(NA_character_, length(raw_keys)), raw_keys)
+
+    if (!is.null(names(pal)) && any(nzchar(names(pal)))) {
+      named <- pal[!is.na(names(pal)) & nzchar(names(pal))]
+      names(named) <- normalise_driver_names(names(named))
+
+      matched_raw <- intersect(raw_keys, names(named))
+      out[matched_raw] <- named[matched_raw]
+
+      display_lookup <- stats::setNames(raw_keys, display_labels)
+      display_names <- names(pal)[!is.na(names(pal)) & nzchar(names(pal))]
+      display_matched <- intersect(display_names, names(display_lookup))
+      if (length(display_matched) > 0) {
+        raw_from_display <- display_lookup[display_matched]
+        out[raw_from_display] <- unname(pal[display_matched])
+      }
+
+      pool <- unname(named[!names(named) %in% raw_keys])
+    } else {
+      pool <- unname(pal)
+    }
+
+    missing <- is.na(out) | !nzchar(out)
+    pool <- pool[!is.na(pool) & nzchar(pool)]
+
+    if (any(missing)) {
+      if (length(pool) < sum(missing)) {
+        pool <- c(pool, scales::hue_pal()(sum(missing) - length(pool)))
+      }
+      out[missing] <- pool[seq_len(sum(missing))]
+    }
+
+    out
   }
 
-  fill_labels <- complete_labels(fill_order, fill_labels)
-  fill_display_labels <- stats::setNames(unname(fill_labels[fill_order]), fill_order)
-  point_display_label <- point_label
-  fill_values <- stats::setNames(unname(fill_values), fill_order)
-  legend_keys <- c(unname(fill_display_labels), point_display_label)
-  legend_values <- stats::setNames(c(unname(fill_values), point_colour), legend_keys)
-  df$.sopi_fill_label <- unname(fill_display_labels[as.character(df[[driver_name]])])
-  df$.sopi_fill_label <- factor(df$.sopi_fill_label, levels = unname(fill_display_labels))
-
-  invalid_rows <- is.na(df[[group_name]]) |
-    is.na(df$.sopi_fill_label) |
-    !is.finite(df[[y_name]]) |
-    !is.finite(df[[total_name]])
-
-  if (any(invalid_rows)) {
-    stop(
-      "plot_net_contribution() cannot plot rows with missing category/driver values or non-finite contribution/net contribution values. ",
-      "Problem rows: ",
-      paste(which(invalid_rows), collapse = ", "),
-      call. = FALSE
+  palette_source <- first_non_empty(palette_fill, palette, fill_values)
+  fallback_colours <- c("#d6effc", "#0080a1", "#7cc688")
+  if (length(fallback_colours) < length(legend_keys)) {
+    fallback_colours <- c(
+      fallback_colours,
+      scales::hue_pal()(length(legend_keys) - length(fallback_colours))
     )
   }
-  
-  # =========================
-  # ORDERING
-  # =========================
-  
+
+  legend_values <- align_combined_palette(
+    pal = palette_source,
+    raw_keys = legend_keys,
+    display_labels = legend_display_labels,
+    fallback = fallback_colours
+  )
+
+  fill_values <- legend_values[fill_order]
+  point_colour <- unname(legend_values[[point_label]])
+
+  groups <- as.character(unique(df[[group_name]]))
+
+  if (!is.null(labels)) {
+    mapped <- labels[groups]
+    mapped[is.na(mapped)] <- groups[is.na(mapped)]
+    df[[group_name]] <- factor(df[[group_name]], levels = groups, labels = mapped)
+  }
+
   order_df <- df |>
     dplyr::group_by(.data[[group_name]]) |>
     dplyr::summarise(total_val = unique(.data[[total_name]])[1], .groups = "drop")
-  
+
   is_other <- grepl(
     paste(other_match, collapse = "|"),
     tolower(as.character(order_df[[group_name]]))
   )
-  
-  core  <- order_df[!is_other, ]
+
+  core <- order_df[!is_other, ]
   other <- order_df[is_other, ]
-  
+
   if (sort == "desc") {
     core <- core[order(-core$total_val), ]
   } else if (sort == "asc") {
     core <- core[order(core$total_val), ]
   }
-  
-  # correct for coord_flip
+
   final_levels <- c(other[[group_name]], core[[group_name]])
-  
   df[[group_name]] <- factor(df[[group_name]], levels = final_levels)
-  
-  # =========================
-  # AXIS
-  # =========================
-  
+
   stacked_extent <- df |>
     dplyr::group_by(.data[[group_name]]) |>
     dplyr::summarise(
@@ -259,21 +233,20 @@ plot_net_contribution <- function(
   if (!is.finite(max_val)) {
     stop("plot_net_contribution() could not calculate an axis range from the data.", call. = FALSE)
   }
-  
+
   if (is.null(x_limits)) {
     n_total <- max(3, n_breaks)
     if (n_total %% 2 == 0) n_total <- n_total + 1
-    
+
     axis_tmp <- get_nice_breaks(max_val, 2, 6)
     axis_max <- axis_tmp$rounded_max
-    
+
     x_limits <- c(-axis_max, axis_max)
     x_breaks <- seq(-axis_max, axis_max, length.out = n_total)
-    
+
     if (is.null(y_accuracy)) {
       y_accuracy <- axis_tmp$accuracy
     }
-    
   } else {
     x_limits <- range(c(x_limits, -max_val, max_val), finite = TRUE)
     if (is.null(x_breaks)) {
@@ -281,26 +254,22 @@ plot_net_contribution <- function(
     }
   }
 
-  legend_items <- data.frame(
-    legend_item = factor(point_display_label, levels = legend_keys),
+  legend_items <- tibble::tibble(
+    legend_item = factor(legend_keys, levels = legend_keys),
     x = df[[group_name]][1],
     y = 0
   )
-  
-  # =========================
-  # PLOT
-  # =========================
-  
+
   p <- ggplot(df, aes(x = .data[[group_name]], y = .data[[y_name]])) +
-    
+
     geom_col(
-      aes(fill = .data$.sopi_fill_label),
+      aes(fill = .data[[driver_name]]),
       width = col_width,
-      show.legend = TRUE
+      show.legend = FALSE
     ) +
-    
+
     geom_hline(yintercept = 0, linewidth = 0.25, colour = "#dad9d9") +
-    
+
     geom_point(
       aes(y = .data[[total_name]]),
       shape = 21,
@@ -319,9 +288,9 @@ plot_net_contribution <- function(
       colour = NA,
       show.legend = TRUE
     ) +
-    
+
     coord_flip(ylim = x_limits, clip = "off") +
-    
+
     scale_y_continuous(
       breaks = x_breaks,
       labels = scales::label_number(
@@ -331,14 +300,14 @@ plot_net_contribution <- function(
       ),
       expand = c(0, 0)
     ) +
-    
+
     scale_fill_manual(
       values = legend_values,
+      labels = stats::setNames(legend_display_labels, legend_keys),
       breaks = legend_keys,
-      labels = legend_keys,
       drop = FALSE
     ) +
-    
+
     labs(
       title = title,
       subtitle = subtitle,
@@ -346,17 +315,17 @@ plot_net_contribution <- function(
       y = x_label,
       fill = NULL
     ) +
-    
+
     theme_sopi(
       family = family,
       base_size = fontsize
     ) +
-    
+
     theme(
       panel.border = element_blank(),
       legend.key = element_rect(fill = NA, colour = NA),
       legend.title = element_blank(),
-      legend.key.width  = unit(4, "mm"),
+      legend.key.width = unit(4, "mm"),
       legend.key.height = unit(4, "mm"),
       legend.position = "right",
       legend.justification = "top",
@@ -364,24 +333,24 @@ plot_net_contribution <- function(
       legend.box = "vertical",
       plot.margin = margin(t = 5, r = 5, b = 5, l = 5),
       legend.margin = margin(t = 0, b = 0),
-      legend.box.margin = margin(t = 0, b = 0) 
+      legend.box.margin = margin(t = 0, b = 0)
     ) +
-    
+
     guides(
       fill = guide_legend(
         keyheight = unit(5, "mm"),
         override.aes = list(
           shape = c(rep(22, length(fill_order)), 21),
-          size  = c(rep(4, length(fill_order)), 3),
-          fill  = unname(legend_values),
+          size = c(rep(4, length(fill_order)), 3),
+          fill = unname(legend_values),
           colour = NA
         )
       )
     )
-  
+
   if (!legend) {
     p <- p + guides(fill = "none")
   }
-  
+
   return(p)
 }
