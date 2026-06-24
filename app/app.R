@@ -1426,6 +1426,13 @@ build_plot_args_config <- function(input, plot_id) {
   }
   
   args <- merge_args(args, collect_chart_registry_args(input, input$plot_function))
+  if (identical(input$plot_function, "plot_net_contribution")) {
+    fill_labels <- parse_named_mapping_text(input$net_contribution_fill_labels)
+    if (!is.null(fill_labels) && length(fill_labels) > 0) {
+      args$fill_labels <- fill_labels
+      args$fill_label <- fill_labels
+    }
+  }
   args$width <- input$width
   args$height <- input$height
   
@@ -1665,6 +1672,13 @@ build_plot <- function(input, data) {
   }
   
   args <- merge_args(args, collect_chart_registry_args(input, input$plot_function))
+  if (identical(input$plot_function, "plot_net_contribution")) {
+    fill_labels <- parse_named_mapping_text(input$net_contribution_fill_labels)
+    if (!is.null(fill_labels) && length(fill_labels) > 0) {
+      args$fill_labels <- fill_labels
+      args$fill_label <- fill_labels
+    }
+  }
   args$plot_function <- input$plot_function
   
   plot_args <- clean_plot_args(
@@ -2079,6 +2093,22 @@ server <- function(input, output, session) {
         .default = drivers
       )
       drivers <- drivers[!is.na(drivers) & nzchar(drivers)]
+      fill_labels <- parse_named_mapping_text(input$net_contribution_fill_labels)
+      if (!is.null(fill_labels) && length(fill_labels) > 0) {
+        names(fill_labels) <- dplyr::recode(
+          names(fill_labels),
+          "Volume" = "Volumes",
+          "volume" = "Volumes",
+          "Quantity" = "Volumes",
+          "quantity" = "Volumes",
+          "Price" = "Prices",
+          "price" = "Prices",
+          .default = names(fill_labels)
+        )
+        driver_labels <- fill_labels[drivers]
+        driver_labels[is.na(driver_labels) | !nzchar(driver_labels)] <- drivers[is.na(driver_labels) | !nzchar(driver_labels)]
+        drivers <- unname(driver_labels)
+      }
       point_label <- input$point_label
       if (is.null(point_label) || is_blank(point_label)) {
         point_label <- "Net contribution"
