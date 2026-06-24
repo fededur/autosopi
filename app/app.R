@@ -676,11 +676,16 @@ render_chart_registry_entry <- function(entry, function_name, data = NULL) {
   }
   
   if (identical(entry$type, "mapping")) {
+    default <- entry$default %||% ""
+    if (identical(function_name, "plot_net_contribution") && identical(entry$id, "fill_labels")) {
+      default <- "Volumes = Volume contribution\nPrices = Price contribution\nNet contribution = Net contribution"
+    }
+
     return(tagList(
       textAreaInput(
         entry$id,
         label,
-        value = entry$default %||% "",
+        value = default,
         rows = 4,
         placeholder = "raw_category = Display label\nanother_raw_category = Another display label"
       ),
@@ -2106,53 +2111,6 @@ server <- function(input, output, session) {
     categories[!is.na(categories) & nzchar(categories)]
   })
 
-  observeEvent(
-    list(input$plot_function, input$driver_field, input$point_label, loaded_data()),
-    {
-      if (!identical(input$plot_function, "plot_net_contribution")) {
-        return()
-      }
-
-      current_value <- input$fill_labels
-      keys <- current_palette_categories()
-      if (length(keys) == 0) {
-        keys <- c("Volumes", "Prices", "Net contribution")
-      }
-
-      values <- dplyr::recode(
-        keys,
-        "Volumes" = "Volume contribution",
-        "Prices" = "Price contribution",
-        .default = keys
-      )
-
-      default_mapping <- stats::setNames(values, keys)
-      current_mapping <- parse_named_mapping_text(current_value)
-      is_old_auto_mapping <- !is.null(current_mapping) &&
-        all(keys %in% names(current_mapping)) &&
-        all(unname(current_mapping[keys]) == keys)
-      is_current_default <- !is.null(current_mapping) &&
-        all(keys %in% names(current_mapping)) &&
-        all(unname(current_mapping[keys]) == unname(default_mapping[keys]))
-
-      if (
-        !is.null(current_value) &&
-          nzchar(trimws(current_value)) &&
-          !is_old_auto_mapping &&
-          !is_current_default
-      ) {
-        return()
-      }
-
-      updateTextAreaInput(
-        session,
-        "fill_labels",
-        value = paste(paste(keys, unname(default_mapping[keys]), sep = " = "), collapse = "\n")
-      )
-    },
-    ignoreInit = FALSE
-  )
-  
   observeEvent(input$fill_palette_from_data, {
     categories <- current_palette_categories()
     if (length(categories) == 0) {
