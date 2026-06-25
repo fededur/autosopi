@@ -823,6 +823,23 @@ first_matching_choice <- function(choices, pattern) {
   if (length(matches) == 0) "" else matches[[1]]
 }
 
+metadata_sheet_choices <- function(metadata_file = "sopi_metadata.xlsx") {
+  path <- metadata_path(project_root, metadata_file)
+  if (!file.exists(path)) return(character())
+  tryCatch(readxl::excel_sheets(path), error = function(e) character())
+}
+
+metadata_column_choices <- function(metadata_file = "sopi_metadata.xlsx", metadata_sheet = "metadata") {
+  path <- metadata_path(project_root, metadata_file)
+  if (!file.exists(path)) return(character())
+  if (!metadata_sheet %in% metadata_sheet_choices(metadata_file)) return(character())
+
+  tryCatch(
+    names(readxl::read_xlsx(path, sheet = metadata_sheet, n_max = 0) |> clean_metadata_names()),
+    error = function(e) character()
+  )
+}
+
 transform_field_input <- function(function_name, arg, id, data = NULL) {
   if (!grepl("^transform_.*_data$", function_name)) {
     return(NULL)
@@ -838,13 +855,44 @@ transform_field_input <- function(function_name, arg, id, data = NULL) {
   if (identical(arg, "category")) {
     choices <- categorical_field_choices(data)
     if (length(choices) == 0 && !is.null(data)) choices <- names(data)
-    selected <- if (length(choices) > 0) choices[[1]] else ""
+    selected <- first_matching_choice(choices, "forecast|sopi|group|category|sector|product|country")
+    if (is_blank(selected) && length(choices) > 0) selected <- choices[[1]]
     return(selectInput(id, "Category column", choices = choices, selected = selected))
   }
 
+  if (identical(function_name, "transform_relabel_data") && identical(arg, "metadata_level")) {
+    return(selectInput(id, "Metadata level", choices = c("forecast_group", "sector"), selected = "forecast_group"))
+  }
+
+  if (identical(function_name, "transform_relabel_data") && identical(arg, "metadata_sheet")) {
+    sheets <- metadata_sheet_choices()
+    if (length(sheets) == 0) sheets <- "metadata"
+    selected <- if ("metadata" %in% sheets) "metadata" else sheets[[1]]
+    return(selectInput(id, "Metadata sheet", choices = sheets, selected = selected))
+  }
+
+  if (identical(function_name, "transform_relabel_data") && identical(arg, "key_col")) {
+    columns <- metadata_column_choices()
+    if (length(columns) == 0) columns <- c("forecast_group_key", "sector_key")
+    selected <- if ("forecast_group_key" %in% columns) "forecast_group_key" else columns[[1]]
+    return(selectInput(id, "Metadata match column", choices = c("Default" = "", columns), selected = selected))
+  }
+
+  if (identical(function_name, "transform_relabel_data") && identical(arg, "label_col")) {
+    columns <- metadata_column_choices()
+    if (length(columns) == 0) columns <- c("forecast_group_label", "sector_label")
+    selected <- if ("forecast_group_label" %in% columns) "forecast_group_label" else columns[[1]]
+    return(selectInput(id, "Metadata label column", choices = c("Default" = "", columns), selected = selected))
+  }
+
+  if (identical(function_name, "transform_relabel_data") && identical(arg, "group_vars")) {
+    choices <- field_choices(data)
+    return(selectizeInput(id, "Extra grouping columns", choices = choices, selected = character(), multiple = TRUE))
+  }
+
   if (identical(arg, "time_var")) {
-    choices <- time_field_choices(data)
-    selected <- if (length(choices) > 0) choices[[1]] else ""
+    choices <- c("None" = "", time_field_choices(data))
+    selected <- first_matching_choice(choices, "year|date|period|time|season|month|quarter")
     return(selectInput(id, "Time column", choices = choices, selected = selected))
   }
 
@@ -1654,9 +1702,17 @@ build_source_data <- function(input) {
 }
 
 build_transformed_data <- function(input, data) {
+  build_transformed_data_until(input, data, max(transform_step_ids(input)))
+}
+
+build_transformed_data_until <- function(input, data, last_step) {
   out <- data
 
   for (step in transform_step_ids(input)) {
+    if (step > last_step) {
+      break
+    }
+
     transform_function <- transform_step_function(input, step)
     if (is.null(transform_function) || is_blank(transform_function) || identical(transform_function, "none")) {
       next
@@ -1874,7 +1930,11 @@ ui <- fluidPage(
             ),
             tags$div(style = "display:none;", numericInput("transform_step_count", NULL, value = 1, min = 1, max = 5)),
             uiOutput("transform_steps_ui"),
-            actionButton("transform_data", "Apply Transform Steps", class = "btn-primary")
+            fluidRow(
+              column(7, uiOutput("preview_transform_step_selector")),
+              column(5, actionButton("preview_transform_step", "Preview Step"))
+            ),
+            actionButton("transform_data", "Apply All Steps", class = "btn-primary")
           )
         ),
         column(
@@ -2448,13 +2508,33 @@ server <- function(input, output, session) {
     updateNumericInput(session, "transform_step_count", value = max(count - 1L, 1L))
   })
 
+  output$preview_transform_step_selector <- renderUI({
+    steps <- transform_step_ids(input)
+    selectInput(
+      "preview_transform_step_id",
+      "Preview through step",
+      choices = stats::setNames(as.character(steps), paste("Step", steps)),
+      selected = as.character(max(steps))
+    )
+  })
+
   output$transform_steps_ui <- renderUI({
-    data <- tryCatch(source_data(), error = function(e) NULL)
+    base_data <- tryCatch(source_data(), error = function(e) NULL)
     steps <- transform_step_ids(input)
 
     tagList(lapply(steps, function(step) {
       transform_function <- transform_step_function(input, step)
       is_open <- step == max(steps)
+      step_data <- if (is.null(base_data)) {
+        NULL
+      } else if (step <= 1L) {
+        base_data
+      } else {
+        tryCatch(
+          build_transformed_data_until(input, base_data, step - 1L),
+          error = function(e) base_data
+        )
+      }
 
       detail_contents <- list(
         tags$summary(paste("Step", step, "-", if (identical(transform_function, "none")) "No transform" else transform_function)),
@@ -2464,7 +2544,7 @@ server <- function(input, output, session) {
           choices = c("None" = "none", transform_function_names),
           selected = transform_function
         ),
-        if (is.null(data)) {
+        if (is.null(step_data)) {
           tags$p(class = "sopi-note", "Load data first to choose transform columns.")
         },
         if (!is.null(transform_function) && !identical(transform_function, "none")) {
@@ -2472,7 +2552,7 @@ server <- function(input, output, session) {
             transform_function,
             transform_step_prefix(step),
             transform_standard_exclusions(),
-            data = data
+            data = step_data
           )
         } else {
           tags$p(class = "sopi-note", "Choose a transform function for this step.")
@@ -2513,19 +2593,70 @@ server <- function(input, output, session) {
   
   source_data <- reactiveVal(NULL)
   loaded_data <- reactiveVal(NULL)
+  data_message <- reactiveVal(NULL)
 
   observeEvent(input$load_data, {
-    data <- build_source_data(input)
-    source_data(data)
-    loaded_data(data)
+    result <- tryCatch(
+      {
+        data <- build_source_data(input)
+        list(ok = TRUE, data = data)
+      },
+      error = function(e) list(ok = FALSE, message = conditionMessage(e))
+    )
+
+    if (isTRUE(result$ok)) {
+      source_data(result$data)
+      loaded_data(result$data)
+      data_message(NULL)
+    } else {
+      data_message(paste("Load failed:", result$message))
+    }
+  })
+
+  observeEvent(input$preview_transform_step, {
+    req(source_data())
+    step <- suppressWarnings(as.integer(input$preview_transform_step_id %||% 1L))
+    if (is.na(step)) step <- 1L
+
+    result <- tryCatch(
+      {
+        data <- build_transformed_data_until(input, source_data(), step)
+        list(ok = TRUE, data = data)
+      },
+      error = function(e) list(ok = FALSE, message = conditionMessage(e))
+    )
+
+    if (isTRUE(result$ok)) {
+      loaded_data(result$data)
+      data_message(paste("Previewing transform output through step", step))
+    } else {
+      data_message(paste("Transform preview failed:", result$message))
+    }
   })
 
   observeEvent(input$transform_data, {
     req(source_data())
-    loaded_data(build_transformed_data(input, source_data()))
+    result <- tryCatch(
+      {
+        data <- build_transformed_data(input, source_data())
+        list(ok = TRUE, data = data)
+      },
+      error = function(e) list(ok = FALSE, message = conditionMessage(e))
+    )
+
+    if (isTRUE(result$ok)) {
+      loaded_data(result$data)
+      data_message("Applied all transform steps")
+    } else {
+      data_message(paste("Transform failed:", result$message))
+    }
   })
   
   output$data_status <- renderPrint({
+    if (!is.null(data_message())) {
+      cat(data_message(), "\n")
+    }
+
     data <- loaded_data()
     cat(nrow(data), "rows x", ncol(data), "columns\n")
     cat(paste(names(data), collapse = ", "))
