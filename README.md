@@ -267,7 +267,7 @@ Rscript run_charts.R config/releases/2026/June/chart_config.xlsx
 After the SVGs have been generated, build a release figure report with Quarto:
 
 ```sh
-Rscript run_release_report.R config/releases/2026/June/chart_config.xlsx
+Rscript run_release_report.R 2026 June
 ```
 
 Quarto must be installed and available on `PATH` to render the HTML file. If Quarto is not available, the project still writes the `.qmd` report file in the release `Report` folder.
@@ -280,6 +280,18 @@ The report is written beside the release `Graphs` folder:
 ```
 
 The report includes only SVG files that exist in the release output folders. It starts a new page for each sector and places the sector figures in config order with captions.
+
+You can also pass the config path directly:
+
+```sh
+Rscript run_release_report.R config/releases/2026/June/chart_config.xlsx
+```
+
+If there is only one release config under `config/releases/`, this also works:
+
+```sh
+Rscript run_release_report.R
+```
 
 You can also run a release-specific config from R:
 
