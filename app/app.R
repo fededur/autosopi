@@ -567,7 +567,7 @@ safe_input_id <- function(prefix, arg_name) {
 chart_arg_registry <- function() {
   list(
     list(section = "fields", args = c("x", "date_var"), id = "x_field", type = "field", label = "X/date/year field", optional = FALSE, match = ""),
-    list(section = "fields", args = "group", id = "group_field", type = "field", label = "Group/category field", optional = TRUE, match = "category|group"),
+    list(section = "fields", args = "group", id = "group_field", type = "field", label = "Group/category field", optional = FALSE, match = "category|group"),
     list(section = "fields", args = "measure", id = "measure_field", type = "field", label = "Measure field", optional = FALSE, match = "measure"),
     list(section = "fields", args = "y_col", id = "column_value", type = "field", label = "Column/bar value", optional = TRUE, match = "revenue|value"),
     list(section = "fields", args = "y", id = "column_value", type = "field", label = "Y value", optional = FALSE, match = "contribution|revenue|value"),
