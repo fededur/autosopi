@@ -186,6 +186,7 @@ plot_generic_col <- function(
     ) +
     theme(
       axis.line.x = element_blank(),
+      axis.ticks.x = element_blank(),  
       legend.title = element_blank(),
       legend.key.width  = unit(4, "mm"),
       legend.key.height = unit(4, "mm"),
