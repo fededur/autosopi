@@ -76,6 +76,7 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
   sector <- args$sector
   group <- args$group
   driver <- args$driver
+  measure <- args$measure %||% "measure"
   plot_function <- args$plot_function
   use_metadata_palette <- isTRUE(args$use_metadata_palette)
 
@@ -109,6 +110,13 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
   }
 
   palette_categories <- label_categories
+  if (identical(plot_function, "plot_generic_col")) {
+    palette_categories <- NULL
+    if (!is.null(data) && !is.null(measure) && measure %in% names(data)) {
+      palette_categories <- unique(as.character(data[[measure]]))
+      palette_categories <- palette_categories[!is.na(palette_categories) & nzchar(palette_categories)]
+    }
+  }
   if (identical(plot_function, "plot_net_contribution")) {
     driver_categories <- NULL
     if (!is.null(data) && !is.null(driver) && driver %in% names(data)) {
@@ -122,7 +130,7 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
   metadata_style <- style_from_metadata(
     metadata_resource = metadata_resource,
     sector = sector,
-    categories = if (identical(plot_function, "plot_net_contribution")) NULL else palette_categories
+    categories = if (plot_function %in% c("plot_net_contribution", "plot_generic_col")) NULL else palette_categories
   )
 
   metadata_label_style <- style_from_metadata(
@@ -155,7 +163,7 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
   }
 
   if (!is.null(palette_categories)) {
-    if (identical(plot_function, "plot_net_contribution")) {
+    if (plot_function %in% c("plot_net_contribution", "plot_generic_col")) {
       args$palette <- complete_palette_by_position(palette_categories, args$palette)
       args$palette_fill <- complete_palette_by_position(palette_categories, args$palette_fill)
       args$palette_line <- complete_palette_by_position(palette_categories, args$palette_line)

@@ -1,6 +1,8 @@
 plot_generic_col <- function(
     data,
-    group = sopi_forecast_group,
+    group = "sopi_forecast_group",
+    measure = "measure",
+    value = "value",
     n_breaks = 5,
     y_lab = "Percentage change",
     y_limits = NULL,
@@ -9,13 +11,22 @@ plot_generic_col <- function(
     col_width = 0.5,
     col_dist = 0.8,
     group_order = NULL,
+    palette = NULL,
+    palette_fill = NULL,
     fill_palette = NULL,
     fill_order = NULL,
+    fill_labels = NULL,
+    legend = TRUE,
     family = "DIN",
     fontsize = 10
 ) {
   
   group <- rlang::ensym(group)
+  measure <- rlang::ensym(measure)
+  value <- rlang::ensym(value)
+  group_name <- rlang::as_string(group)
+  measure_name <- rlang::as_string(measure)
+  value_name <- rlang::as_string(value)
   
   # =========================
   # DATA
@@ -24,11 +35,40 @@ plot_generic_col <- function(
   if (!is.null(group_order)) {
     data <- data %>%
       mutate(
-        sopi_forecast_group = factor(
-          sopi_forecast_group,
+        !!group_name := factor(
+          .data[[group_name]],
           levels = group_order
         )
       )
+  }
+
+  measure_values <- unique(as.character(data[[measure_name]]))
+  measure_values <- measure_values[!is.na(measure_values) & nzchar(measure_values)]
+
+  if (is.null(fill_order)) {
+    fill_order <- measure_values
+  } else {
+    fill_order <- as.character(fill_order)
+    fill_order <- fill_order[nzchar(fill_order)]
+  }
+
+  if (is.null(fill_labels)) {
+    fill_labels <- stats::setNames(fill_order, fill_order)
+  } else {
+    fill_labels <- complete_labels(fill_order, fill_labels)
+  }
+
+  first_non_empty <- function(...) {
+    values <- list(...)
+    for (item in values) {
+      if (!is.null(item) && length(item) > 0) return(item)
+    }
+    NULL
+  }
+
+  fill_palette <- first_non_empty(fill_palette, palette_fill, palette)
+  if (!is.null(fill_palette)) {
+    fill_palette <- complete_palette(fill_order, fill_palette)
   }
   
   n_groups <- n_distinct(dplyr::pull(data, !!group))
@@ -37,7 +77,7 @@ plot_generic_col <- function(
   # AXIS
   # =========================
   
-  max_val <- max(abs(data$value), na.rm = TRUE)
+  max_val <- max(abs(data[[value_name]]), na.rm = TRUE)
   
   if (is.null(y_limits)) {
     
@@ -77,12 +117,12 @@ plot_generic_col <- function(
   # PLOT
   # =========================
   
-  ggplot(
+  p <- ggplot(
     data,
     aes(
       x = !!group,
-      y = value,
-      fill = measure
+      y = !!value,
+      fill = !!measure
     )
   ) +
     geom_col(
@@ -103,10 +143,22 @@ plot_generic_col <- function(
       linetype = "dashed",
       colour = "#dad9d9"
     ) +
-    scale_fill_manual(
-      values = fill_palette,
-      breaks = fill_order
-    ) +
+    {
+      if (is.null(fill_palette)) {
+        scale_fill_discrete(
+          breaks = fill_order,
+          labels = unname(fill_labels[fill_order]),
+          drop = FALSE
+        )
+      } else {
+        scale_fill_manual(
+          values = fill_palette,
+          breaks = fill_order,
+          labels = unname(fill_labels[fill_order]),
+          drop = FALSE
+        )
+      }
+    } +
     scale_y_continuous(
       limits = y_limits,
       breaks = y_breaks,
@@ -137,4 +189,10 @@ plot_generic_col <- function(
       legend.margin = margin(t = 0, b = 0),
       legend.box.margin = margin(t = 0, b = 0) 
     )
+
+  if (!legend) {
+    p <- p + guides(fill = "none")
+  }
+
+  p
 }

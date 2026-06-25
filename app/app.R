@@ -568,8 +568,10 @@ chart_arg_registry <- function() {
   list(
     list(section = "fields", args = c("x", "date_var"), id = "x_field", type = "field", label = "X/date/year field", optional = FALSE, match = ""),
     list(section = "fields", args = "group", id = "group_field", type = "field", label = "Group/category field", optional = TRUE, match = "category|group"),
+    list(section = "fields", args = "measure", id = "measure_field", type = "field", label = "Measure field", optional = FALSE, match = "measure"),
     list(section = "fields", args = "y_col", id = "column_value", type = "field", label = "Column/bar value", optional = TRUE, match = "revenue|value"),
     list(section = "fields", args = "y", id = "column_value", type = "field", label = "Y value", optional = FALSE, match = "contribution|revenue|value"),
+    list(section = "fields", args = "value", id = "column_value", type = "field", label = "Y value", optional = FALSE, match = "value|pct|change|contribution|revenue"),
     list(section = "fields", args = "y_line", id = "line_value", type = "field", label = "Line value", optional = TRUE, match = "volume"),
     list(section = "fields", args = "driver", id = "driver_field", type = "field", label = "Driver field", optional = FALSE, match = "driver"),
     list(section = "fields", args = "total", id = "total_field", type = "field", label = "Net contribution", optional = FALSE, match = "net_contribution|total"),
@@ -2083,6 +2085,19 @@ server <- function(input, output, session) {
       }
       return(unique(c(drivers, point_label)))
     }
+
+    if (identical(input$plot_function, "plot_generic_col")) {
+      measure_field <- input$measure_field
+      if (is_blank(measure_field)) {
+        measure_field <- "measure"
+      }
+      if (!measure_field %in% names(data)) {
+        return(character())
+      }
+
+      measures <- unique(as.character(data[[measure_field]]))
+      return(measures[!is.na(measures) & nzchar(measures)])
+    }
     
     if (
       identical(input$plot_function, "plot_monthly_descriptive") &&
@@ -2122,7 +2137,7 @@ server <- function(input, output, session) {
         metadata_resource = metadata_resource(),
         sector = input$sector
       )
-    } else if (identical(input$plot_function, "plot_net_contribution")) {
+    } else if (input$plot_function %in% c("plot_net_contribution", "plot_generic_col")) {
       metadata_style <- style_from_metadata(
         metadata_resource = metadata_resource(),
         sector = input$sector
@@ -2216,7 +2231,7 @@ server <- function(input, output, session) {
             metadata_resource = metadata_resource(),
             sector = input$sector
           )
-        } else if (identical(input$plot_function, "plot_net_contribution")) {
+        } else if (input$plot_function %in% c("plot_net_contribution", "plot_generic_col")) {
           metadata_style <- style_from_metadata(metadata_resource(), input$sector)
           complete_palette_by_position(categories, metadata_style$palette)
         } else {

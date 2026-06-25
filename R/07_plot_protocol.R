@@ -1,7 +1,7 @@
 sopi_plot_protocol <- function() {
   list(
     required = c("data"),
-    data = c("x", "y", "y_col", "y_line", "group", "driver", "total"),
+    data = c("x", "y", "y_col", "y_line", "group", "measure", "value", "driver", "total"),
     data_aliases = c("date_var"),
     time = c(
       "x_freq",
