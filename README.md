@@ -264,6 +264,23 @@ $env:SOPI_RELEASES_ROOT = "C:\Users\<you>\SharePoint\SOPI_releases"
 Rscript run_charts.R config/releases/2026/June/chart_config.xlsx
 ```
 
+After the SVGs have been generated, build a release figure report with Quarto:
+
+```sh
+Rscript run_release_report.R config/releases/2026/June/chart_config.xlsx
+```
+
+Quarto must be installed and available on `PATH` to render the HTML file. If Quarto is not available, the project still writes the `.qmd` report file in the release `Report` folder.
+
+The report is written beside the release `Graphs` folder:
+
+```text
+<SOPI releases root>/2026/June/Report/sopi_release_figures.qmd
+<SOPI releases root>/2026/June/Report/sopi_release_figures.html
+```
+
+The report includes only SVG files that exist in the release output folders. It starts a new page for each sector and places the sector figures in config order with captions.
+
 You can also run a release-specific config from R:
 
 ```r
