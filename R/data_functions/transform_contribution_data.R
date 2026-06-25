@@ -15,7 +15,7 @@ transform_contribution_data <- function(
     }
     matches[[1]]
   }
-
+  
   fields <- names(data)
   if (is.null(revenue) || !nzchar(trimws(as.character(revenue)))) {
     revenue <- detect_column(fields, "^(export[ _.-]*)?(revenue|value)$|export[ _.-]*(revenue|value)", "revenue")
@@ -23,10 +23,10 @@ transform_contribution_data <- function(
   if (is.null(quantity) || !nzchar(trimws(as.character(quantity)))) {
     quantity <- detect_column(fields, "^(export[ _.-]*)?(quantity|volume)$|export[ _.-]*(quantity|volume)", "quantity or volume")
   }
-
+  
   revenue <- as.character(revenue)
   quantity <- as.character(quantity)
-
+  
   dt <- data %>%
     arrange(.data[[group]], .data[[time_var]]) %>%
     group_by(.data[[group]]) %>%
@@ -45,12 +45,12 @@ transform_contribution_data <- function(
       quantity_contribution = quantity_effect + 0.5 * interaction
     ) %>%
     ungroup()
-
+  
   total_revenue_lag <- dt %>%
     filter(.data[[time_var]] == max(.data[[time_var]]), !is.na(revenue_lag)) %>%
     pull(revenue_lag) %>%
     sum(., na.rm = TRUE)
-
+  
   dt %>%
     mutate(
       price_pp = price_contribution / total_revenue_lag,
