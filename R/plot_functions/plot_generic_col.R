@@ -9,24 +9,10 @@ plot_generic_col <- function(
     col_width = 0.5,
     col_dist = 0.8,
     group_order = NULL,
-    fill_palette = c(
-      Revenue = "#1b9e77",
-      Quantity = "#d95f02",
-      Price = "#7570b3"
-    ),
-    fill_labels = c(
-      revenue_yoy_change_pct = "Revenue",
-      quantity_yoy_change_pct = "Quantity",
-      price_yoy_change_pct = "Price"
-    ),
-    fill_order = c(
-      "Revenue",
-      "Quantity",
-      "Price"
-    ),
+    fill_palette = NULL,
+    fill_order = NULL,
     family = "DIN",
     fontsize = 10
-    
 ) {
   
   group <- rlang::ensym(group)
@@ -34,32 +20,9 @@ plot_generic_col <- function(
   # =========================
   # DATA
   # =========================
-  
-  plot_data <- data %>%
-    arrange(!!group, year) %>%
-    group_by(!!group) %>%
-    mutate(
-      price = revenue / quantity,
-      revenue_yoy_change_pct  = revenue / lag(revenue)  - 1,
-      quantity_yoy_change_pct = quantity / lag(quantity) - 1,
-      price_yoy_change_pct    = price / lag(price) - 1
-    ) %>%
-    ungroup() %>%
-    pivot_longer(
-      cols = ends_with("_yoy_change_pct"),
-      names_to = "measure",
-      values_to = "value"
-    ) %>%
-    filter(!is.na(value)) %>%
-    mutate(
-      measure = recode(measure, !!!fill_labels),
-      measure = factor(measure, levels = fill_order)
-    ) %>%
-    filter(year == max(year))
-  
-  
+
   if (!is.null(group_order)) {
-    plot_data <- plot_data %>%
+    data <- data %>%
       mutate(
         sopi_forecast_group = factor(
           sopi_forecast_group,
@@ -68,13 +31,13 @@ plot_generic_col <- function(
       )
   }
   
-  n_groups <- n_distinct(dplyr::pull(plot_data, !!group))
+  n_groups <- n_distinct(dplyr::pull(data, !!group))
   
   # =========================
   # AXIS
   # =========================
   
-  max_val <- max(abs(plot_data$value), na.rm = TRUE)
+  max_val <- max(abs(data$value), na.rm = TRUE)
   
   if (is.null(y_limits)) {
     
@@ -115,7 +78,7 @@ plot_generic_col <- function(
   # =========================
   
   ggplot(
-    plot_data,
+    data,
     aes(
       x = !!group,
       y = value,
@@ -175,39 +138,3 @@ plot_generic_col <- function(
       legend.box.margin = margin(t = 0, b = 0) 
     )
 }
-
-# p2 <- plot_generic_col(t %>% filter(year<2027,
-#                                     sopi_forecast_group %in% c("Mutton","Wool","Lamb","Beef and Veal","Venison")) ,
-#                        fill_palette = build_color_palette(c("Revenue","Quantity","Price"),meat_colours[1:3]),
-#                  fill_order = c(
-#                    "Revenue","Price",
-#                    "Quantity"
-#                    ),
-#                  col_width = 0.5,
-#                  col_dist = 0.6,
-#                  y_limits = c(-0.2,0.4),
-#                  group_order = c("Beef and Veal","Lamb", "Mutton","Venison","Wool"),
-#                  family = "DIN",
-#                  fontsize = 10
-#                  
-#                  )
-# 
-# ggsave(
-#   filename = "plot_generic_col.svg",
-#   plot = p2,
-#   width = 180,
-#   height = 100,
-#   units = "mm"
-# )
-# 
-# 
-# meat_colours <- get_palette(level = "forecast_group", sector = "Meat and Wool", metadata_table = sector_metadata)
-# 
-# metadata_path <- "J:/NEFD/SOPI Graphs/metadata/sopi_metadata.xlsx"
-# sector_metadata <- read_metadata(metadata_path)
-# 
-# 
-# 
-# 
-# 
-# build_color_palette(c("Revenue","Quantity","Price"),meat_colours[1:3])
