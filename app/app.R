@@ -840,7 +840,25 @@ metadata_column_choices <- function(metadata_file = "sopi_metadata.xlsx", metada
   )
 }
 
-transform_field_input <- function(function_name, arg, id, data = NULL) {
+valid_selected_value <- function(current_value, choices, fallback = "") {
+  values <- as.character(unname(choices))
+  current_value <- as.character(current_value %||% "")
+  current_value <- current_value[nzchar(current_value)]
+
+  if (length(current_value) > 0 && current_value[[1]] %in% values) {
+    return(current_value[[1]])
+  }
+
+  fallback
+}
+
+valid_selected_values <- function(current_value, choices) {
+  values <- as.character(unname(choices))
+  current_value <- as.character(current_value %||% character())
+  current_value[current_value %in% values]
+}
+
+transform_field_input <- function(function_name, arg, id, data = NULL, current_value = NULL) {
   if (!grepl("^transform_.*_data$", function_name)) {
     return(NULL)
   }
@@ -849,6 +867,7 @@ transform_field_input <- function(function_name, arg, id, data = NULL) {
     choices <- categorical_field_choices(data)
     if (length(choices) == 0 && !is.null(data)) choices <- names(data)
     selected <- if (length(choices) > 0) choices[[1]] else ""
+    selected <- valid_selected_value(current_value, choices, selected)
     return(selectInput(id, "Group/category column", choices = choices, selected = selected))
   }
 
@@ -857,17 +876,21 @@ transform_field_input <- function(function_name, arg, id, data = NULL) {
     if (length(choices) == 0 && !is.null(data)) choices <- names(data)
     selected <- first_matching_choice(choices, "forecast|sopi|group|category|sector|product|country")
     if (is_blank(selected) && length(choices) > 0) selected <- choices[[1]]
+    selected <- valid_selected_value(current_value, choices, selected)
     return(selectInput(id, "Category column", choices = choices, selected = selected))
   }
 
   if (identical(function_name, "transform_relabel_data") && identical(arg, "metadata_level")) {
-    return(selectInput(id, "Metadata level", choices = c("forecast_group", "sector"), selected = "forecast_group"))
+    choices <- c("forecast_group", "sector")
+    selected <- valid_selected_value(current_value, choices, "forecast_group")
+    return(selectInput(id, "Metadata level", choices = choices, selected = selected))
   }
 
   if (identical(function_name, "transform_relabel_data") && identical(arg, "metadata_sheet")) {
     sheets <- metadata_sheet_choices()
     if (length(sheets) == 0) sheets <- "metadata"
     selected <- if ("metadata" %in% sheets) "metadata" else sheets[[1]]
+    selected <- valid_selected_value(current_value, sheets, selected)
     return(selectInput(id, "Metadata sheet", choices = sheets, selected = selected))
   }
 
@@ -875,6 +898,7 @@ transform_field_input <- function(function_name, arg, id, data = NULL) {
     columns <- metadata_column_choices()
     if (length(columns) == 0) columns <- c("forecast_group_key", "sector_key")
     selected <- if ("forecast_group_key" %in% columns) "forecast_group_key" else columns[[1]]
+    selected <- valid_selected_value(current_value, c("Default" = "", columns), selected)
     return(selectInput(id, "Metadata match column", choices = c("Default" = "", columns), selected = selected))
   }
 
@@ -882,42 +906,48 @@ transform_field_input <- function(function_name, arg, id, data = NULL) {
     columns <- metadata_column_choices()
     if (length(columns) == 0) columns <- c("forecast_group_label", "sector_label")
     selected <- if ("forecast_group_label" %in% columns) "forecast_group_label" else columns[[1]]
+    selected <- valid_selected_value(current_value, c("Default" = "", columns), selected)
     return(selectInput(id, "Metadata label column", choices = c("Default" = "", columns), selected = selected))
   }
 
   if (identical(function_name, "transform_relabel_data") && identical(arg, "group_vars")) {
     choices <- field_choices(data)
-    return(selectizeInput(id, "Extra grouping columns", choices = choices, selected = character(), multiple = TRUE))
+    selected <- valid_selected_values(current_value, choices)
+    return(selectizeInput(id, "Extra grouping columns", choices = choices, selected = selected, multiple = TRUE))
   }
 
   if (identical(arg, "time_var")) {
     choices <- c("None" = "", time_field_choices(data))
     selected <- first_matching_choice(choices, "year|date|period|time|season|month|quarter")
+    selected <- valid_selected_value(current_value, choices, selected)
     return(selectInput(id, "Time column", choices = choices, selected = selected))
   }
 
   if (function_name %in% c("transform_contribution_data", "transform_relabel_data") && identical(arg, "revenue")) {
     choices <- c("Auto detect" = "", numeric_field_choices(data))
     selected <- first_matching_choice(choices, "^(export[ _.-]*)?(revenue|value)$|export[ _.-]*(revenue|value)")
+    selected <- valid_selected_value(current_value, choices, selected)
     return(selectInput(id, "Revenue/value column", choices = choices, selected = selected))
   }
 
   if (function_name %in% c("transform_contribution_data", "transform_relabel_data") && identical(arg, "quantity")) {
     choices <- c("Auto detect" = "", numeric_field_choices(data))
     selected <- first_matching_choice(choices, "^(export[ _.-]*)?(quantity|volume)$|export[ _.-]*(quantity|volume)")
+    selected <- valid_selected_value(current_value, choices, selected)
     return(selectInput(id, "Quantity/volume column", choices = choices, selected = selected))
   }
 
   if (identical(function_name, "transform_relabel_data") && identical(arg, "price")) {
     choices <- c("Auto detect" = "", numeric_field_choices(data))
     selected <- first_matching_choice(choices, "price")
+    selected <- valid_selected_value(current_value, choices, selected)
     return(selectInput(id, "Price column", choices = choices, selected = selected))
   }
 
   NULL
 }
 
-function_argument_inputs <- function(function_name, prefix, exclude, data = NULL) {
+function_argument_inputs <- function(function_name, prefix, exclude, data = NULL, input_values = NULL) {
   args <- function_extra_args(function_name, exclude)
   
   if (length(args) == 0) {
@@ -929,7 +959,8 @@ function_argument_inputs <- function(function_name, prefix, exclude, data = NULL
     id <- safe_input_id(prefix, arg)
     label <- data_arg_label(function_name, arg)
     note <- data_arg_note(function_name, arg)
-    field_input <- transform_field_input(function_name, arg, id, data)
+    current_value <- if (is.null(input_values)) NULL else input_values[[id]]
+    field_input <- transform_field_input(function_name, arg, id, data, current_value)
 
     if (!is.null(field_input)) {
       field_input
@@ -945,11 +976,15 @@ function_argument_inputs <- function(function_name, prefix, exclude, data = NULL
         tags$p(class = "sopi-note", "Use one named item per line, for example: revenue = 'Export Measures'[Export Free On Board ($NZ)].")
       )
     } else if (is.logical(default)) {
-      tagList(checkboxInput(id, label, value = default), note)
+      value <- if (is.null(current_value)) default else isTRUE(current_value)
+      tagList(checkboxInput(id, label, value = value), note)
     } else if (is.numeric(default)) {
-      tagList(numericInput(id, label, value = default), note)
+      value <- suppressWarnings(as.numeric(current_value %||% default))
+      if (is.na(value)) value <- default
+      tagList(numericInput(id, label, value = value), note)
     } else {
-      tagList(textInput(id, label, value = as.character(default)), note)
+      value <- current_value %||% as.character(default)
+      tagList(textInput(id, label, value = as.character(value)), note)
     }
   }))
 }
@@ -2552,7 +2587,8 @@ server <- function(input, output, session) {
             transform_function,
             transform_step_prefix(step),
             transform_standard_exclusions(),
-            data = step_data
+            data = step_data,
+            input_values = input
           )
         } else {
           tags$p(class = "sopi-note", "Choose a transform function for this step.")
