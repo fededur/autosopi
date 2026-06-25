@@ -552,6 +552,11 @@ add_palette_args_for_function <- function(args, palette, function_name) {
   
   fn_formals <- names(formals(get(function_name, mode = "function")))
   palette_args <- intersect(sopi_palette_arg_names(include_aliases = TRUE), fn_formals)
+
+  if (identical(function_name, "plot_generic_ts") && "palette" %in% palette_args) {
+    args$palette <- palette
+    return(args)
+  }
   
   for (arg_name in palette_args) {
     args[[arg_name]] <- palette
@@ -2285,14 +2290,14 @@ server <- function(input, output, session) {
         sector = input$sector
       )
     } else if (input$plot_function %in% c("plot_net_contribution", "plot_generic_col")) {
-      metadata_style <- style_from_metadata(
+      metadata_style <- style_from_metadata_auto_ref(
         metadata_resource = metadata_resource(),
         sector = input$sector
       )
 
       palette <- complete_palette_by_position(categories, metadata_style$palette)
     } else {
-      metadata_style <- style_from_metadata(
+      metadata_style <- style_from_metadata_auto_ref(
         metadata_resource = metadata_resource(),
         sector = input$sector,
         categories = categories
@@ -2371,7 +2376,7 @@ server <- function(input, output, session) {
       } else {
         categories <- current_palette_categories()
         if (length(categories) == 0) {
-          style_from_metadata(metadata_resource(), input$sector)$palette
+          style_from_metadata_auto_ref(metadata_resource(), input$sector)$palette
         } else if (identical(input$plot_function, "plot_monthly_descriptive")) {
           monthly_descriptive_palette(
             categories = categories,
@@ -2379,10 +2384,10 @@ server <- function(input, output, session) {
             sector = input$sector
           )
         } else if (input$plot_function %in% c("plot_net_contribution", "plot_generic_col")) {
-          metadata_style <- style_from_metadata(metadata_resource(), input$sector)
+          metadata_style <- style_from_metadata_auto_ref(metadata_resource(), input$sector)
           complete_palette_by_position(categories, metadata_style$palette)
         } else {
-          style_from_metadata(metadata_resource(), input$sector, categories = categories)$palette
+          style_from_metadata_auto_ref(metadata_resource(), input$sector, categories = categories)$palette
         }
       }
     }, error = function(e) {

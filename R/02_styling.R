@@ -558,6 +558,48 @@ style_from_metadata <- function(
   list(palette = palette, labels = labels)
 }
 
+style_from_metadata_auto_ref <- function(
+    metadata_resource,
+    sector,
+    categories = NULL,
+    fill = "actual",
+    include_total = FALSE) {
+  style_key <- style_from_metadata(
+    metadata_resource = metadata_resource,
+    sector = sector,
+    categories = categories,
+    ref = "key",
+    fill = fill,
+    include_total = include_total
+  )
+
+  style_label <- style_from_metadata(
+    metadata_resource = metadata_resource,
+    sector = sector,
+    categories = categories,
+    ref = "label",
+    fill = fill,
+    include_total = include_total
+  )
+
+  score_style <- function(style) {
+    if (is.null(categories) || length(categories) == 0 || is.null(style$palette)) {
+      return(if (is_varied_palette(style$palette)) 0 else -1)
+    }
+
+    palette_names <- names(style$palette)
+    exact_matches <- sum(categories %in% palette_names)
+    non_fallback <- sum(unname(style$palette) != unname(complete_palette(categories, NULL)))
+    exact_matches + non_fallback
+  }
+
+  if (score_style(style_label) > score_style(style_key)) {
+    style_label
+  } else {
+    style_key
+  }
+}
+
 palette_from_metadata <- function(
     project_root,
     sector,

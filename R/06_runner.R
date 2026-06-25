@@ -127,13 +127,13 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
     palette_categories <- unique(c(driver_categories, point_label))
   }
 
-  metadata_style <- style_from_metadata(
+  metadata_style <- style_from_metadata_auto_ref(
     metadata_resource = metadata_resource,
     sector = sector,
     categories = if (plot_function %in% c("plot_net_contribution", "plot_generic_col")) NULL else palette_categories
   )
 
-  metadata_label_style <- style_from_metadata(
+  metadata_label_style <- style_from_metadata_auto_ref(
     metadata_resource = metadata_resource,
     sector = sector,
     categories = label_categories
@@ -143,11 +143,11 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
     args$palette <- metadata_style$palette
   }
 
-  if (is.null(args$palette_fill)) {
+  if (is.null(args$palette_fill) && !identical(plot_function, "plot_generic_ts")) {
     args$palette_fill <- args$palette
   }
 
-  if (is.null(args$palette_line)) {
+  if (is.null(args$palette_line) && !identical(plot_function, "plot_generic_ts")) {
     args$palette_line <- args$palette
   }
 
@@ -167,6 +167,14 @@ clean_plot_args <- function(args, config, project_root, data = NULL, metadata_re
       args$palette <- complete_palette_by_position(palette_categories, args$palette)
       args$palette_fill <- complete_palette_by_position(palette_categories, args$palette_fill)
       args$palette_line <- complete_palette_by_position(palette_categories, args$palette_line)
+    } else if (identical(plot_function, "plot_generic_ts")) {
+      args$palette <- complete_palette(palette_categories, args$palette)
+      if (!is.null(args$palette_fill)) {
+        args$palette_fill <- complete_palette(palette_categories, args$palette_fill)
+      }
+      if (!is.null(args$palette_line)) {
+        args$palette_line <- complete_palette(palette_categories, args$palette_line)
+      }
     } else {
       args$palette <- complete_palette(palette_categories, args$palette)
       args$palette_fill <- complete_palette(palette_categories, args$palette_fill)
