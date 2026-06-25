@@ -4,7 +4,7 @@ transform_topn_data <- function(
     top_group = group,
     time_var = NULL,
     top_n = 10,
-    top_by = "revenue",
+    top_by = "Revenue",
     return_others = TRUE,
     other_category = "All other"
 ) {
