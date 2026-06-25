@@ -585,6 +585,7 @@ chart_arg_registry <- function() {
     list(section = "labels", args = "y_line_label", id = "line_axis_label", type = "text", label = "Line axis label", default = ""),
     list(section = "labels", args = "line_label", id = "line_legend_label", type = "text", label = "Line legend label", default = ""),
     list(section = "labels", args = "labels", id = "legend_labels", type = "mapping", label = "Legend labels", default = ""),
+    list(section = "labels", args = "fill_labels", id = "fill_labels", type = "mapping", label = "Fill labels", default = ""),
     list(section = "labels", args = "point_label", id = "point_label", type = "text", label = "Point label", default = ""),
     list(section = "advanced", args = "primary_min_breaks", id = "primary_min_breaks", type = "numeric", label = "Primary min breaks", default = 4, min = 2),
     list(section = "advanced", args = "primary_max_breaks", id = "primary_max_breaks", type = "numeric", label = "Primary max breaks", default = 6, min = 2),
@@ -603,6 +604,7 @@ chart_arg_registry <- function() {
     list(section = "advanced", args = "sort_col", id = "sort_col", type = "select", label = "Sort columns", default = "none", choices = c("none", "asc", "desc")),
     list(section = "advanced", args = "sort_line", id = "sort_line", type = "select", label = "Sort lines", default = "none", choices = c("none", "asc", "desc")),
     list(section = "advanced", args = "sort", id = "sort_bars", type = "select", label = "Sort bars", default = "desc", choices = c("desc", "asc", "none")),
+    list(section = "advanced", args = "fill_order", id = "fill_order", type = "vector", label = "Fill order", default = ""),
     list(section = "advanced", args = "legend_order", id = "legend_order", type = "vector", label = "Legend order", default = ""),
     list(section = "advanced", args = "col_order", id = "col_order", type = "vector", label = "Column order", default = ""),
     list(section = "advanced", args = "line_order", id = "line_order", type = "vector", label = "Line order", default = "")

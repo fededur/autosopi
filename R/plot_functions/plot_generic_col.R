@@ -45,8 +45,13 @@ plot_generic_col <- function(
   measure_values <- unique(as.character(data[[measure_name]]))
   measure_values <- measure_values[!is.na(measure_values) & nzchar(measure_values)]
 
+  preferred_measure_order <- c("Price", "Quantity", "Revenue")
   if (is.null(fill_order)) {
-    fill_order <- measure_values
+    fill_order <- if (all(preferred_measure_order %in% measure_values)) {
+      preferred_measure_order
+    } else {
+      measure_values
+    }
   } else {
     fill_order <- as.character(fill_order)
     fill_order <- fill_order[nzchar(fill_order)]
@@ -54,6 +59,9 @@ plot_generic_col <- function(
 
   if (is.null(fill_labels)) {
     fill_labels <- stats::setNames(fill_order, fill_order)
+    if ("Quantity" %in% names(fill_labels)) {
+      fill_labels[["Quantity"]] <- "Volume"
+    }
   } else {
     fill_labels <- complete_labels(fill_order, fill_labels)
   }

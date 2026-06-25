@@ -10,7 +10,7 @@ transform_yoychange_data <- function(
       quantity_yoy_change_pct = "Quantity",
       price_yoy_change_pct = "Price"
     ),
-    fill_order = c("Revenue","Quantity","Price")
+    fill_order = c("Price", "Quantity", "Revenue")
 ) {
   
   time_var <- as.character(time_var)
