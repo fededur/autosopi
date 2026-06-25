@@ -13,6 +13,7 @@ transform_relabel_data <- function(
     revenue = NULL,
     quantity = NULL,
     price = NULL,
+    group_all_character = FALSE,
     keep_unmatched = TRUE
 ) {
   category <- as.character(category)
@@ -108,9 +109,13 @@ transform_relabel_data <- function(
   time_var <- if (is.null(time_var)) character() else as.character(time_var)
   group_vars <- if (is.null(group_vars)) character() else as.character(group_vars)
 
-  character_group_vars <- names(data)[
-    vapply(data, function(x) is.character(x) || is.factor(x) || inherits(x, c("Date", "POSIXct", "POSIXlt")), logical(1))
-  ]
+  character_group_vars <- if (isTRUE(group_all_character)) {
+    names(data)[
+      vapply(data, function(x) is.character(x) || is.factor(x) || inherits(x, c("Date", "POSIXct", "POSIXlt")), logical(1))
+    ]
+  } else {
+    names(data)[vapply(data, function(x) inherits(x, c("Date", "POSIXct", "POSIXlt")), logical(1))]
+  }
   time_like_numeric_vars <- names(data)[
     vapply(data, is.numeric, logical(1)) &
       grepl("year|month|quarter|period|season|date", names(data), ignore.case = TRUE)

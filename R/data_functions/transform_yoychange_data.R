@@ -14,6 +14,7 @@ transform_yoychange_data <- function(
 ) {
   
   time_var <- as.character(time_var)
+  group <- as.character(group)
   
   detect_column <- function(fields, patterns, label) {
     matches <- fields[grepl(patterns, fields, ignore.case = TRUE)]
@@ -44,6 +45,46 @@ transform_yoychange_data <- function(
     "price_yoy_change_pct"
   ))
    
+  missing_group <- setdiff(group, names(data))
+  if (length(missing_group) > 0) {
+    stop("Group column(s) not found in data: ", paste(missing_group, collapse = ", "), call. = FALSE)
+  }
+
+  if (!time_var %in% names(data)) {
+    stop("Time column not found in data: ", time_var, call. = FALSE)
+  }
+
+  n_periods_total <- dplyr::n_distinct(data[[time_var]], na.rm = TRUE)
+  if (n_periods_total < 2) {
+    stop(
+      "transform_yoychange_data() needs at least two time periods to calculate year-on-year change. ",
+      "The selected time column '", time_var, "' has only ", n_periods_total, " period",
+      ifelse(n_periods_total == 1, "", "s"),
+      ". Check filters or load more than one year/period.",
+      call. = FALSE
+    )
+  }
+
+  group_counts <- data %>%
+    group_by(across(all_of(group))) %>%
+    summarise(n_periods = dplyr::n_distinct(.data[[time_var]], na.rm = TRUE), .groups = "drop") %>%
+    mutate(.group_label = do.call(paste, c(across(all_of(group)), sep = " / ")))
+
+  single_period_groups <- group_counts %>%
+    filter(.data$n_periods < 2)
+
+  if (nrow(single_period_groups) > 0) {
+    stop(
+      "transform_yoychange_data() needs at least two time periods within each group. ",
+      "These groups have fewer than two periods after filters/previous transforms: ",
+      paste(
+        paste(single_period_groups$.group_label, single_period_groups$n_periods, sep = "="),
+        collapse = ", "
+      ),
+      call. = FALSE
+    )
+  }
+
   dt <- data %>%
     arrange(
       across(all_of(group)),
@@ -74,6 +115,19 @@ transform_yoychange_data <- function(
       measure = recode(measure, !!!fill_labels),
       measure = factor(measure, levels = fill_order)
     )
+
+  if (nrow(dt) == 0) {
+    stop(
+      "transform_yoychange_data() returned no rows because no non-missing year-on-year changes could be calculated. ",
+      "Check that each group has at least two time periods after previous transform steps. ",
+      "Period counts: ",
+      paste(
+        paste(group_counts$.group_label, group_counts$n_periods, sep = "="),
+        collapse = ", "
+      ),
+      call. = FALSE
+    )
+  }
   
   if (
     isTRUE(latest) &&
