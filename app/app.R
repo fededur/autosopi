@@ -1111,6 +1111,10 @@ normalize_svg_filename <- function(value) {
   value
 }
 
+svg_filename_id <- function(value, fallback = "chart") {
+  safe_config_id(normalize_svg_filename(value), fallback = fallback)
+}
+
 is_absolute_path <- function(path) {
   grepl("^([A-Za-z]:|/|\\\\\\\\)", path)
 }
@@ -2114,8 +2118,8 @@ ui <- fluidPage(
               column(6, numericInput("width", "Width (mm)", value = 230, min = 30, step = 5)),
               column(6, numericInput("height", "Height (mm)", value = 130, min = 30, step = 5))
             ),
-            textInput("plot_id", "Plot ID", value = "preview_chart"),
-            textInput("data_source_id", "Data source ID", value = "preview_chart_data"),
+            tags$p(class = "sopi-note", "Plot ID and data source ID are generated from the SVG filename."),
+            verbatimTextOutput("derived_config_ids"),
             checkboxInput("update_chart_config", "Update release chart_config.xlsx", value = TRUE),
             tags$p(class = "sopi-note", "Existing matching IDs are updated; new IDs are appended."),
             verbatimTextOutput("config_path_preview"),
@@ -2440,6 +2444,15 @@ server <- function(input, output, session) {
   
   output$config_path_preview <- renderText({
     release_config_path(project_root, input$release_year, input$release_round)
+  })
+
+  output$derived_config_ids <- renderText({
+    id <- svg_filename_id(input$output_file, fallback = "chart")
+    paste(
+      paste("Plot ID:", id),
+      paste("Data source ID:", id),
+      sep = "\n"
+    )
   })
   
   resolved_svg_path <- reactive({
@@ -2793,8 +2806,8 @@ server <- function(input, output, session) {
     }
     
     output_file <- normalize_svg_filename(input$output_file)
-    plot_id <- safe_config_id(input$plot_id, fallback = safe_config_id(output_file, "chart"))
-    data_source_id <- safe_config_id(input$data_source_id, fallback = paste0(plot_id, "_data"))
+    plot_id <- svg_filename_id(output_file, fallback = "chart")
+    data_source_id <- plot_id
     output_path <- resolved_svg_path()
     
     result <- tryCatch({
