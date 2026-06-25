@@ -123,19 +123,20 @@ write_release_report_qmd <- function(report_plan, report_dir, release_year, rele
     "  html:",
     "    toc: true",
     "    embed-resources: false",
+    "engine: knitr",
     "execute:",
     "  echo: false",
     "  warning: false",
     "  message: false",
     "---",
     "",
-    "```{css}",
+    "<style>",
     ".sector-page { page-break-before: always; break-before: page; }",
     ".sector-page:first-of-type { page-break-before: auto; break-before: auto; }",
     "figure { margin-bottom: 36px; }",
     "figcaption { margin-top: 8px; color: #555; font-size: 0.95em; }",
     "img { max-width: 100%; height: auto; }",
-    "```",
+    "</style>",
     ""
   )
 
