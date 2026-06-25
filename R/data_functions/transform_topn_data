@@ -1,0 +1,142 @@
+transform_topn_data <- function(
+    data,
+    group,
+    top_group = group,
+    time_var = NULL,
+    top_n = 10,
+    top_by = "revenue",
+    return_others = TRUE,
+    other_category = "All other"
+) {
+  
+  group <- as.character(group)
+  top_group <- as.character(top_group)
+  
+  time_var <- if (is.null(time_var)) NULL else as.character(time_var)
+  top_by <- as.character(top_by)
+  
+  # Prevent duplicate use of time variable
+  if (!is.null(time_var) && time_var %in% group) {
+    stop(
+      "'time_var' should not also be included in 'group'.",
+      call. = FALSE
+    )
+  }
+  
+  # Identify top categories
+  top_categories <- data %>%
+    group_by(across(all_of(top_group))) %>%
+    summarise(
+      top_value = sum(.data[[top_by]], na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    slice_max(
+      order_by = top_value,
+      n = top_n,
+      with_ties = FALSE
+    )
+  
+  # Return only top categories
+  if (!return_others) {
+    
+    return(
+      semi_join(
+        data,
+        top_categories[top_group],
+        by = top_group
+      )
+    )
+    
+  }
+  
+  # Flag top categories
+  dt <- data %>%
+    left_join(
+      transform(
+        top_categories[top_group],
+        .is_top = TRUE
+      ),
+      by = top_group
+    )
+  
+  # Recode non-top categories
+  for (col in top_group) {
+    
+    dt[[col]] <- ifelse(
+      is.na(dt$.is_top),
+      other_category,
+      as.character(dt[[col]])
+    )
+    
+  }
+  
+  dt$.is_top <- NULL
+  
+  # Grouping variables
+  grouping_vars <- c(
+    if (!is.null(time_var)) time_var,
+    group
+  )
+  
+  # Numeric columns to aggregate
+  numeric_cols <- names(dt)[vapply(dt, is.numeric, logical(1))]
+  
+  numeric_cols <- setdiff(
+    numeric_cols,
+    grouping_vars
+  )
+  
+  # Do not aggregate price-like columns
+  price_cols <- names(dt)[
+    grepl("price", names(dt), ignore.case = TRUE)
+  ]
+  
+  numeric_cols <- setdiff(
+    numeric_cols,
+    price_cols
+  )
+  
+  # Aggregate
+  dt <- dt %>%
+    group_by(across(all_of(grouping_vars))) %>%
+    summarise(
+      across(
+        all_of(numeric_cols),
+        \(x) sum(x, na.rm = TRUE)
+      ),
+      .groups = "drop"
+    )
+  
+  # Recalculate price if present
+  revenue_col <- names(dt)[
+    grepl(
+      "^(export[ _.-]*)?(revenue|value)$|export[ _.-]*(revenue|value)",
+      names(dt),
+      ignore.case = TRUE
+    )
+  ][1]
+  
+  quantity_col <- names(dt)[
+    grepl(
+      "^(export[ _.-]*)?(quantity|volume)$|export[ _.-]*(quantity|volume)",
+      names(dt),
+      ignore.case = TRUE
+    )
+  ][1]
+  
+  if (
+    length(price_cols) > 0 &&
+    !is.na(revenue_col) &&
+    !is.na(quantity_col) &&
+    revenue_col %in% names(dt) &&
+    quantity_col %in% names(dt)
+  ) {
+    
+    dt[[price_cols[1]]] <-
+      dt[[revenue_col]] / dt[[quantity_col]]
+    
+  }
+  
+  return(dt)
+  
+}
