@@ -835,22 +835,35 @@ transform_field_input <- function(function_name, arg, id, data = NULL) {
     return(selectInput(id, "Group/category column", choices = choices, selected = selected))
   }
 
+  if (identical(arg, "category")) {
+    choices <- categorical_field_choices(data)
+    if (length(choices) == 0 && !is.null(data)) choices <- names(data)
+    selected <- if (length(choices) > 0) choices[[1]] else ""
+    return(selectInput(id, "Category column", choices = choices, selected = selected))
+  }
+
   if (identical(arg, "time_var")) {
     choices <- time_field_choices(data)
     selected <- if (length(choices) > 0) choices[[1]] else ""
     return(selectInput(id, "Time column", choices = choices, selected = selected))
   }
 
-  if (identical(function_name, "transform_contribution_data") && identical(arg, "revenue")) {
+  if (function_name %in% c("transform_contribution_data", "transform_relabel_data") && identical(arg, "revenue")) {
     choices <- c("Auto detect" = "", numeric_field_choices(data))
     selected <- first_matching_choice(choices, "^(export[ _.-]*)?(revenue|value)$|export[ _.-]*(revenue|value)")
     return(selectInput(id, "Revenue/value column", choices = choices, selected = selected))
   }
 
-  if (identical(function_name, "transform_contribution_data") && identical(arg, "quantity")) {
+  if (function_name %in% c("transform_contribution_data", "transform_relabel_data") && identical(arg, "quantity")) {
     choices <- c("Auto detect" = "", numeric_field_choices(data))
     selected <- first_matching_choice(choices, "^(export[ _.-]*)?(quantity|volume)$|export[ _.-]*(quantity|volume)")
     return(selectInput(id, "Quantity/volume column", choices = choices, selected = selected))
+  }
+
+  if (identical(function_name, "transform_relabel_data") && identical(arg, "price")) {
+    choices <- c("Auto detect" = "", numeric_field_choices(data))
+    selected <- first_matching_choice(choices, "price")
+    return(selectInput(id, "Price column", choices = choices, selected = selected))
   }
 
   NULL
@@ -1620,6 +1633,7 @@ build_transformed_data <- function(input, data) {
 
   args <- collect_function_arguments(input, transform_function, "transform_arg", transform_standard_exclusions())
   args$data <- data
+  args$project_root <- project_root
 
   call_named_function(transform_function, args)
 }
