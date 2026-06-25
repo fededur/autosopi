@@ -19,14 +19,58 @@ apply_data_transform <- function(data, data_transform = NULL, transform_args = l
     return(data)
   }
 
-  transform_function <- data_transform$transform_function[[1]]
-  if (is_blank(transform_function)) {
-    return(data)
+  if (!"transform_step" %in% names(data_transform)) {
+    data_transform$transform_step <- "1"
   }
 
-  transform_args$data <- data
-  transform_args$project_root <- project_root
-  call_named_function(transform_function, transform_args)
+  if (is.data.frame(transform_args) && !"transform_step" %in% names(transform_args)) {
+    transform_args$transform_step <- "1"
+  }
+
+  data_transform <- data_transform |>
+    dplyr::mutate(.transform_step_num = suppressWarnings(as.numeric(.data$transform_step))) |>
+    dplyr::arrange(.data$.transform_step_num, .data$transform_step) |>
+    dplyr::select(-".transform_step_num")
+
+  out <- data
+
+  for (i in seq_len(nrow(data_transform))) {
+    transform_function <- data_transform$transform_function[[i]]
+    if (is_blank(transform_function)) {
+      next
+    }
+
+    step <- as.character(data_transform$transform_step[[i]])
+    step_args <- if (is.data.frame(transform_args)) {
+      args_from_transform_table(transform_args, data_transform$data_source_id[[i]], step)
+    } else {
+      transform_args
+    }
+
+    step_args$data <- out
+    step_args$project_root <- project_root
+    out <- call_named_function(transform_function, step_args)
+  }
+
+  out
+}
+
+args_from_transform_table <- function(tbl, data_source_id, transform_step) {
+  if (is.null(tbl) || nrow(tbl) == 0) {
+    return(list())
+  }
+
+  rows <- tbl |>
+    dplyr::filter(.data$data_source_id == data_source_id) |>
+    dplyr::filter(.data$transform_step == transform_step)
+
+  if (nrow(rows) == 0) {
+    return(list())
+  }
+
+  values <- Map(parse_scalar, rows$arg_value, rows$arg_type)
+  names(values) <- rows$arg_name
+  values[!vapply(values, is.null, logical(1))]
 }
 
 read_excel_data <- function(data_source, project_root, context = list()) {

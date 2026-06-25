@@ -62,13 +62,21 @@ read_chart_config <- function(path) {
   if ("data_transforms" %in% sheets) {
     config$data_transforms <- read_config_sheet(path, "data_transforms")
   } else {
-    config$data_transforms <- empty_config_sheet(c("data_source_id", "active", "transform_function", "notes"))
+    config$data_transforms <- empty_config_sheet(c("data_source_id", "transform_step", "active", "transform_function", "notes"))
   }
 
   if ("transform_args" %in% sheets) {
     config$transform_args <- read_config_sheet(path, "transform_args")
   } else {
-    config$transform_args <- empty_config_sheet(c("data_source_id", "arg_name", "arg_value", "arg_type", "notes"))
+    config$transform_args <- empty_config_sheet(c("data_source_id", "transform_step", "arg_name", "arg_value", "arg_type", "notes"))
+  }
+
+  if (!"transform_step" %in% names(config$data_transforms)) {
+    config$data_transforms$transform_step <- "1"
+  }
+
+  if (!"transform_step" %in% names(config$transform_args)) {
+    config$transform_args$transform_step <- "1"
   }
 
   validate_config(config)
@@ -141,10 +149,12 @@ resolve_job_settings <- function(job, config) {
     dplyr::filter(.data$data_source_id == job$data_source_id) |>
     dplyr::slice(1)
 
-  transform_row <- config$data_transforms |>
+  transform_rows <- config$data_transforms |>
     dplyr::filter(.data$data_source_id == job$data_source_id) |>
     dplyr::filter(.data$active %in% c(TRUE, "TRUE", "true", "Yes", "yes", 1)) |>
-    dplyr::slice(1)
+    dplyr::mutate(.transform_step_num = suppressWarnings(as.numeric(.data$transform_step))) |>
+    dplyr::arrange(.data$.transform_step_num, .data$transform_step) |>
+    dplyr::select(-".transform_step_num")
 
   data_args <- merge_args(
     global,
@@ -159,26 +169,66 @@ resolve_job_settings <- function(job, config) {
     args_from_table(config$plot_args, "plot_id", job$plot_id)
   )
 
-  transform_args <- merge_args(
-    global,
-    sector,
-    args_from_table(config$transform_args, "data_source_id", job$data_source_id)
-  )
+  transform_args <- config$transform_args |>
+    dplyr::filter(.data$data_source_id == job$data_source_id)
 
   plot_args <- apply_release_plot_aliases(plot_args)
   data_args <- apply_release_data_aliases(data_args)
-  transform_args <- apply_release_data_aliases(transform_args)
+  transform_args <- apply_release_transform_aliases(transform_args, global, sector)
 
   list(
     global = global,
     sector = sector,
     plot = plot_row,
     data_source = source_row,
-    data_transform = transform_row,
+    data_transform = transform_rows,
     data_args = data_args,
     transform_args = transform_args,
     plot_args = plot_args
   )
+}
+
+apply_release_transform_aliases <- function(transform_args, global, sector) {
+  if (is.null(transform_args) || nrow(transform_args) == 0) {
+    return(transform_args)
+  }
+
+  transform_args <- transform_args |>
+    dplyr::filter(!is.na(.data$arg_name), nzchar(.data$arg_name))
+
+  inherited <- merge_args(global, sector)
+  inherited <- apply_release_data_aliases(inherited)
+
+  inherited_rows <- args_to_transform_rows(
+    data_source_id = unique(transform_args$data_source_id)[[1]],
+    transform_step = unique(transform_args$transform_step),
+    args = inherited,
+    notes = "Inherited release/sector setting"
+  )
+
+  dplyr::bind_rows(inherited_rows, transform_args)
+}
+
+args_to_transform_rows <- function(data_source_id, transform_step, args, notes = NA_character_) {
+  if (is.null(args) || length(args) == 0 || length(transform_step) == 0) {
+    return(empty_config_sheet(c("data_source_id", "transform_step", "arg_name", "arg_value", "arg_type", "notes")))
+  }
+
+  rows <- lapply(as.character(transform_step), function(step) {
+    data.frame(
+      data_source_id = data_source_id,
+      transform_step = step,
+      arg_name = names(args),
+      arg_value = vapply(args, function(x) paste(as.character(x), collapse = ","), character(1)),
+      arg_type = vapply(args, function(x) {
+        if (is.logical(x)) "logical" else if (is.numeric(x)) "numeric" else if (length(x) > 1) "character_vector" else "character"
+      }, character(1)),
+      notes = notes,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  dplyr::bind_rows(rows)
 }
 
 apply_release_plot_aliases <- function(args) {

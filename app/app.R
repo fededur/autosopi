@@ -1373,29 +1373,57 @@ build_data_args_config <- function(input, data_source_id) {
   args_to_config_rows("data_source_id", data_source_id, args, "Created from Shiny app")
 }
 
-build_data_transform_config <- function(input, data_source_id) {
-  transform_function <- input$transform_function
-  active <- !is.null(transform_function) &&
-    !is_blank(transform_function) &&
-    !identical(transform_function, "none")
+transform_step_ids <- function(input) {
+  count <- suppressWarnings(as.integer(input$transform_step_count %||% 1L))
+  if (is.na(count) || count < 1L) count <- 1L
+  seq_len(min(count, 5L))
+}
 
-  data.frame(
-    data_source_id = data_source_id,
-    active = ifelse(active, "TRUE", "FALSE"),
-    transform_function = if (active) transform_function else NA_character_,
-    notes = if (active) "Created from Shiny app" else "No transform",
-    stringsAsFactors = FALSE
-  )
+transform_step_function <- function(input, step) {
+  input[[paste0("transform_function_", step)]] %||% "none"
+}
+
+transform_step_prefix <- function(step) {
+  paste0("transform_arg_", step)
+}
+
+build_data_transform_config <- function(input, data_source_id) {
+  rows <- lapply(transform_step_ids(input), function(step) {
+    transform_function <- transform_step_function(input, step)
+    active <- !is.null(transform_function) &&
+      !is_blank(transform_function) &&
+      !identical(transform_function, "none")
+
+    data.frame(
+      data_source_id = data_source_id,
+      transform_step = as.character(step),
+      active = ifelse(active, "TRUE", "FALSE"),
+      transform_function = if (active) transform_function else NA_character_,
+      notes = if (active) "Created from Shiny app" else "No transform",
+      stringsAsFactors = FALSE
+    )
+  })
+
+  dplyr::bind_rows(rows)
 }
 
 build_transform_args_config <- function(input, data_source_id) {
-  transform_function <- input$transform_function
-  if (is.null(transform_function) || is_blank(transform_function) || identical(transform_function, "none")) {
-    return(empty_config_table(c("data_source_id", "arg_name", "arg_value", "arg_type", "notes")))
-  }
+  rows <- lapply(transform_step_ids(input), function(step) {
+    transform_function <- transform_step_function(input, step)
+    if (is.null(transform_function) || is_blank(transform_function) || identical(transform_function, "none")) {
+      return(empty_config_table(c("data_source_id", "transform_step", "arg_name", "arg_value", "arg_type", "notes")))
+    }
 
-  args <- collect_function_arguments(input, transform_function, "transform_arg", transform_standard_exclusions())
-  args_to_config_rows("data_source_id", data_source_id, args, "Created from Shiny app")
+    args <- collect_function_arguments(input, transform_function, transform_step_prefix(step), transform_standard_exclusions())
+    out <- args_to_config_rows("data_source_id", data_source_id, args, "Created from Shiny app")
+    if (nrow(out) == 0) {
+      return(empty_config_table(c("data_source_id", "transform_step", "arg_name", "arg_value", "arg_type", "notes")))
+    }
+    out$transform_step <- as.character(step)
+    out[, c("data_source_id", "transform_step", "arg_name", "arg_value", "arg_type", "notes"), drop = FALSE]
+  })
+
+  dplyr::bind_rows(rows)
 }
 
 build_plot_config <- function(input, plot_id, data_source_id, existing_plots) {
@@ -1501,8 +1529,8 @@ write_release_config_from_app <- function(input, project_root, plot_id, data_sou
     plot_args = c("plot_id", "arg_name", "arg_value", "arg_type", "notes"),
     data_sources = c("data_source_id", "source_type", "source_ref", "sheet", "range", "data_function", "cache", "notes"),
     data_args = c("data_source_id", "arg_name", "arg_value", "arg_type", "notes"),
-    data_transforms = c("data_source_id", "active", "transform_function", "notes"),
-    transform_args = c("data_source_id", "arg_name", "arg_value", "arg_type", "notes"),
+    data_transforms = c("data_source_id", "transform_step", "active", "transform_function", "notes"),
+    transform_args = c("data_source_id", "transform_step", "arg_name", "arg_value", "arg_type", "notes"),
     run_control = c("setting_name", "setting_value", "setting_type", "notes"),
     palettes = c("palette", "item", "hex", "notes")
   )
@@ -1626,16 +1654,22 @@ build_source_data <- function(input) {
 }
 
 build_transformed_data <- function(input, data) {
-  transform_function <- input$transform_function
-  if (is.null(transform_function) || is_blank(transform_function) || identical(transform_function, "none")) {
-    return(data)
+  out <- data
+
+  for (step in transform_step_ids(input)) {
+    transform_function <- transform_step_function(input, step)
+    if (is.null(transform_function) || is_blank(transform_function) || identical(transform_function, "none")) {
+      next
+    }
+
+    args <- collect_function_arguments(input, transform_function, transform_step_prefix(step), transform_standard_exclusions())
+    args$data <- out
+    args$project_root <- project_root
+
+    out <- call_named_function(transform_function, args)
   }
 
-  args <- collect_function_arguments(input, transform_function, "transform_arg", transform_standard_exclusions())
-  args$data <- data
-  args$project_root <- project_root
-
-  call_named_function(transform_function, args)
+  out
 }
 
 build_data <- function(input) {
@@ -1736,6 +1770,8 @@ ui <- fluidPage(
       .sopi-preview { max-height: calc(100vh - 255px); overflow: auto; background: white; border: 1px solid #ddd; padding: 8px; }
       .sopi-svg-preview { max-height: 320px; display: flex; align-items: center; justify-content: center; }
       .sopi-svg-preview svg { max-width: 100%; max-height: 280px; width: auto !important; height: auto !important; }
+      .sopi-transform-step { border: 1px solid #ddd; border-radius: 6px; padding: 6px 8px; margin-top: 8px; background: #fafafa; }
+      .sopi-transform-step summary { cursor: pointer; font-weight: 600; margin-bottom: 6px; }
       table { font-size: 0.9em; }
     "))
   ),
@@ -1831,14 +1867,14 @@ ui <- fluidPage(
           4,
           wellPanel(
             h4("Transform"),
-            selectInput(
-              "transform_function",
-              "Transform function",
-              choices = c("None" = "none", transform_function_names),
-              selected = "none"
+            tags$p(class = "sopi-note", "Add transform steps and apply them in order. Open a step to edit its arguments."),
+            fluidRow(
+              column(6, actionButton("add_transform_step", "Add Step")),
+              column(6, actionButton("remove_transform_step", "Remove Step"))
             ),
-            uiOutput("transform_function_args"),
-            actionButton("transform_data", "Transform Data", class = "btn-primary")
+            tags$div(style = "display:none;", numericInput("transform_step_count", NULL, value = 1, min = 1, max = 5)),
+            uiOutput("transform_steps_ui"),
+            actionButton("transform_data", "Apply Transform Steps", class = "btn-primary")
           )
         ),
         column(
@@ -2400,21 +2436,55 @@ server <- function(input, output, session) {
     )
   })
 
-  output$transform_function_args <- renderUI({
-    transform_function <- input$transform_function
-    if (is.null(transform_function) || identical(transform_function, "none")) {
-      return(tags$p(class = "sopi-note", "No transform will be applied."))
-    }
+  observeEvent(input$add_transform_step, {
+    count <- suppressWarnings(as.integer(input$transform_step_count %||% 1L))
+    if (is.na(count)) count <- 1L
+    updateNumericInput(session, "transform_step_count", value = min(count + 1L, 5L))
+  })
 
+  observeEvent(input$remove_transform_step, {
+    count <- suppressWarnings(as.integer(input$transform_step_count %||% 1L))
+    if (is.na(count)) count <- 1L
+    updateNumericInput(session, "transform_step_count", value = max(count - 1L, 1L))
+  })
+
+  output$transform_steps_ui <- renderUI({
     data <- tryCatch(source_data(), error = function(e) NULL)
+    steps <- transform_step_ids(input)
 
-    tagList(
-      tags$h4("Transform arguments"),
-      if (is.null(data)) {
-        tags$p(class = "sopi-note", "Load data first to choose transform columns.")
-      },
-      function_argument_inputs(transform_function, "transform_arg", transform_standard_exclusions(), data = data)
-    )
+    tagList(lapply(steps, function(step) {
+      transform_function <- transform_step_function(input, step)
+      is_open <- step == max(steps)
+
+      detail_contents <- list(
+        tags$summary(paste("Step", step, "-", if (identical(transform_function, "none")) "No transform" else transform_function)),
+        selectInput(
+          paste0("transform_function_", step),
+          "Transform function",
+          choices = c("None" = "none", transform_function_names),
+          selected = transform_function
+        ),
+        if (is.null(data)) {
+          tags$p(class = "sopi-note", "Load data first to choose transform columns.")
+        },
+        if (!is.null(transform_function) && !identical(transform_function, "none")) {
+          function_argument_inputs(
+            transform_function,
+            transform_step_prefix(step),
+            transform_standard_exclusions(),
+            data = data
+          )
+        } else {
+          tags$p(class = "sopi-note", "Choose a transform function for this step.")
+        }
+      )
+
+      if (is_open) {
+        do.call(tags$details, c(list(class = "sopi-transform-step", open = "open"), detail_contents))
+      } else {
+        do.call(tags$details, c(list(class = "sopi-transform-step"), detail_contents))
+      }
+    }))
   })
 
   output$omt_filter_controls <- renderUI({
