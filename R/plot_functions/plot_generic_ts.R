@@ -475,6 +475,24 @@ plot_generic_ts <- function(
     
     stats::setNames(aligned, groups)
   }
+
+  darken_palette <- function(cols, amount = 0.25) {
+    if (is.null(cols)) return(NULL)
+
+    rgb <- grDevices::col2rgb(cols, alpha = TRUE)
+    rgb[1:3, ] <- pmax(0, rgb[1:3, ] * (1 - amount))
+
+    stats::setNames(
+      grDevices::rgb(
+        red = rgb[1, ],
+        green = rgb[2, ],
+        blue = rgb[3, ],
+        alpha = rgb[4, ],
+        maxColorValue = 255
+      ),
+      names(cols)
+    )
+  }
   
   base_cols <- if (is.null(palette)) {
     stats::setNames(scales::hue_pal()(length(group_vals)), group_vals)
@@ -484,10 +502,23 @@ plot_generic_ts <- function(
   
   palette_fill <- align_palette(palette_fill, group_vals)
   palette_line <- align_palette(palette_line, group_vals)
+
+  if (has_col && has_line) {
+    if (col_is_primary) {
+      col_group_cols <- if (!is.null(palette_fill)) palette_fill else base_cols
+      line_group_cols <- if (!is.null(palette_line)) palette_line else darken_palette(col_group_cols)
+    } else {
+      line_group_cols <- if (!is.null(palette_line)) palette_line else base_cols
+      col_group_cols <- if (!is.null(palette_fill)) palette_fill else darken_palette(line_group_cols)
+    }
+  } else {
+    col_group_cols <- if (!is.null(palette_fill)) palette_fill else scales::alpha(base_cols, 0.7)
+    line_group_cols <- if (!is.null(palette_line)) palette_line else base_cols
+  }
   
   if (has_col) {
     fill_palette <- stats::setNames(
-      if (!is.null(palette_fill)) palette_fill else scales::alpha(base_cols, 0.7),
+      col_group_cols,
       paste(group_vals, col_key_label, sep = ".")
     )
     
@@ -497,7 +528,7 @@ plot_generic_ts <- function(
   
   if (has_line) {
     colour_palette <- stats::setNames(
-      if (!is.null(palette_line)) palette_line else base_cols,
+      line_group_cols,
       paste(group_vals, line_key_label, sep = ".")
     )
     
