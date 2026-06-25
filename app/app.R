@@ -164,6 +164,31 @@ transform_function_names <- transform_function_names[
   vapply(transform_function_names, is_user_facing_transform_function, logical(1))
 ]
 
+app_defaults <- list(
+  sector = "Seafood",
+  release_year = as.integer(format(Sys.Date(), "%Y")),
+  release_round = "June",
+  manual_data_workbook_template = "{year}/{release}/Data/{sector}/{sector}.xlsx",
+  output_folder_template = "{year}/{release}/Graphs/{sector}",
+  font_family = "DIN",
+  base_size = 10.5,
+  data_source_type = "function",
+  use_release_sector_workbook = TRUE,
+  excel_path = "",
+  excel_range = "",
+  transform_step_count = 1,
+  plot_function = if (length(plot_function_names) > 0) plot_function_names[[1]] else "",
+  data_function = if (length(data_function_names) > 0) data_function_names[[1]] else "",
+  palette_mode = "metadata",
+  custom_palette_name = "",
+  custom_palette_text = "",
+  output_file = "preview_chart.svg",
+  width = 230,
+  height = 130,
+  update_chart_config = TRUE,
+  plot_extra_args = ""
+)
+
 parse_extra_args <- function(text) {
   if (is.null(text) || !nzchar(trimws(text))) return(list())
   
@@ -757,6 +782,66 @@ collect_chart_registry_args <- function(input, function_name) {
   }
   
   args
+}
+
+default_field_selection <- function(entry, data = NULL) {
+  fields <- field_choices(data)
+  if (isTRUE(entry$optional)) {
+    return("")
+  }
+
+  selected <- if (!is.null(entry$match) && nzchar(entry$match)) {
+    first_matching_field(fields, entry$match)
+  } else if (length(fields) > 0) {
+    fields[[1]]
+  } else {
+    ""
+  }
+
+  if (is_blank(selected) && length(fields) > 0) {
+    selected <- fields[[1]]
+  }
+
+  selected
+}
+
+reset_chart_registry_inputs <- function(session, function_name, data = NULL) {
+  for (entry in chart_registry_entries(function_name)) {
+    id <- entry$id
+
+    if (identical(entry$type, "field")) {
+      updateSelectInput(session, id, selected = default_field_selection(entry, data))
+    } else if (identical(entry$type, "select")) {
+      updateSelectInput(session, id, selected = entry$default)
+    } else if (identical(entry$type, "checkbox")) {
+      updateCheckboxInput(session, id, value = isTRUE(entry$default))
+    } else if (identical(entry$type, "numeric")) {
+      updateNumericInput(session, id, value = entry$default)
+    } else if (identical(entry$type, "mapping")) {
+      updateTextAreaInput(session, id, value = entry$default %||% "")
+    } else if (identical(entry$type, "vector")) {
+      updateTextInput(session, id, value = entry$default %||% "")
+    } else {
+      updateTextInput(session, id, value = entry$default %||% "")
+    }
+  }
+}
+
+reset_function_argument_inputs <- function(session, function_name, prefix, exclude) {
+  for (arg in function_extra_args(function_name, exclude)) {
+    id <- safe_input_id(prefix, arg)
+    default <- formal_default_text(function_name, arg)
+
+    if (is.logical(default)) {
+      updateCheckboxInput(session, id, value = default)
+    } else if (is.numeric(default)) {
+      updateNumericInput(session, id, value = default)
+    } else if (is_omt_list_arg(function_name, arg)) {
+      updateTextAreaInput(session, id, value = formal_default_named_text(function_name, arg))
+    } else {
+      updateTextInput(session, id, value = as.character(default))
+    }
+  }
 }
 
 function_extra_args <- function(function_name, exclude) {
@@ -1886,9 +1971,10 @@ ui <- fluidPage(
           5,
           wellPanel(
             h4("Release"),
-            selectInput("sector", "Sector", choices = sopi_sectors, selected = "Seafood"),
-            numericInput("release_year", "Release year", value = as.integer(format(Sys.Date(), "%Y")), min = 2000),
-            selectInput("release_round", "Release round", choices = c("June", "December"), selected = "June")
+            actionButton("reset_overview_defaults", "Clear to Defaults"),
+            selectInput("sector", "Sector", choices = sopi_sectors, selected = app_defaults$sector),
+            numericInput("release_year", "Release year", value = app_defaults$release_year, min = 2000),
+            selectInput("release_round", "Release round", choices = c("June", "December"), selected = app_defaults$release_round)
           )
         ),
         column(
@@ -1904,7 +1990,7 @@ ui <- fluidPage(
             textInput(
               "manual_data_workbook_template",
               "Manual data workbook template",
-              value = "{year}/{release}/Data/{sector}/{sector}.xlsx"
+              value = app_defaults$manual_data_workbook_template
             ),
             tags$p(class = "sopi-note", "Templates can use {year}, {release}, and {sector}. Config files save these as portable {SOPI_RELEASES_ROOT} paths."),
             actionButton("refresh_output_files", "Refresh Output Files"),
@@ -1944,23 +2030,24 @@ ui <- fluidPage(
           4,
           wellPanel(
             h4("Load"),
-            radioButtons("data_source_type", "Data source", choices = c("R function" = "function", "Excel sheet" = "excel")),
+            actionButton("reset_data_defaults", "Clear to Defaults"),
+            radioButtons("data_source_type", "Data source", choices = c("R function" = "function", "Excel sheet" = "excel"), selected = app_defaults$data_source_type),
             conditionalPanel(
               "input.data_source_type == 'function'",
-              selectInput("data_function", "Data function", choices = data_function_names),
+              selectInput("data_function", "Data function", choices = data_function_names, selected = app_defaults$data_function),
               uiOutput("data_function_args")
             ),
             conditionalPanel(
               "input.data_source_type == 'excel'",
-              checkboxInput("use_release_sector_workbook", "Use release/sector SharePoint workbook", value = TRUE),
+              checkboxInput("use_release_sector_workbook", "Use release/sector SharePoint workbook", value = app_defaults$use_release_sector_workbook),
               tags$p(class = "sopi-note", "Workbook path:"),
               verbatimTextOutput("resolved_excel_path"),
               conditionalPanel(
                 "!input.use_release_sector_workbook",
-                textInput("excel_path", "Custom Excel file path", value = "")
+                textInput("excel_path", "Custom Excel file path", value = app_defaults$excel_path)
               ),
               uiOutput("excel_sheet_selector"),
-              textInput("excel_range", "Range, optional", value = "")
+              textInput("excel_range", "Range, optional", value = app_defaults$excel_range)
             ),
             actionButton("load_data", "Load Data", class = "btn-primary")
           )
@@ -1974,7 +2061,7 @@ ui <- fluidPage(
               column(6, actionButton("add_transform_step", "Add Step")),
               column(6, actionButton("remove_transform_step", "Remove Step"))
             ),
-            tags$div(style = "display:none;", numericInput("transform_step_count", NULL, value = 1, min = 1, max = 5)),
+            tags$div(style = "display:none;", numericInput("transform_step_count", NULL, value = app_defaults$transform_step_count, min = 1, max = 5)),
             uiOutput("transform_steps_ui"),
             fluidRow(
               column(7, uiOutput("preview_transform_step_selector")),
@@ -2000,8 +2087,9 @@ ui <- fluidPage(
           4,
           wellPanel(
             h4("Typography"),
-            textInput("font_family", "Font family", value = "DIN"),
-            numericInput("base_size", "Base font size", value = 10.5, min = 6, step = 0.5)
+            actionButton("reset_style_defaults", "Clear to Defaults"),
+            textInput("font_family", "Font family", value = app_defaults$font_family),
+            numericInput("base_size", "Base font size", value = app_defaults$base_size, min = 6, step = 0.5)
           )
         ),
         column(
@@ -2020,7 +2108,8 @@ ui <- fluidPage(
         column(
           4,
           wellPanel(
-            selectInput("plot_function", "Plot function", choices = plot_function_names),
+            actionButton("reset_chart_defaults", "Clear to Defaults"),
+            selectInput("plot_function", "Plot function", choices = plot_function_names, selected = app_defaults$plot_function),
             uiOutput("field_selectors"),
             uiOutput("plot_function_args"),
             uiOutput("chart_option_controls")
@@ -2038,7 +2127,7 @@ ui <- fluidPage(
           wellPanel(
             h4("Advanced"),
             uiOutput("chart_advanced_controls"),
-            textAreaInput("plot_extra_args", "Extra plot arguments", rows = 3)
+            textAreaInput("plot_extra_args", "Extra plot arguments", value = app_defaults$plot_extra_args, rows = 3)
           )
         )
       ),
@@ -2058,17 +2147,17 @@ ui <- fluidPage(
                     "Saved custom palette" = "saved",
                     "Create/update custom palette" = "custom"
                   ),
-                  selected = "metadata"
+                  selected = app_defaults$palette_mode
                 ),
                 uiOutput("saved_palette_selector"),
-                textInput("custom_palette_name", "Custom palette name", value = "")
+                textInput("custom_palette_name", "Custom palette name", value = app_defaults$custom_palette_name)
               ),
               column(
                 8,
                 textAreaInput(
                   "custom_palette_text",
                   "Custom palette items",
-                  value = "",
+                  value = app_defaults$custom_palette_text,
                   rows = 5,
                   placeholder = "Category A = #1f77b4\nCategory B = #ff7f0e"
                 ),
@@ -2108,19 +2197,19 @@ ui <- fluidPage(
             textInput(
               "output_folder_template",
               "Graph output folder template",
-              value = "{year}/{release}/Graphs/{sector}"
+              value = app_defaults$output_folder_template
             ),
-            textInput("output_file", "SVG filename", value = "preview_chart.svg"),
+            textInput("output_file", "SVG filename", value = app_defaults$output_file),
             tags$p(class = "sopi-note", "Resolved SVG save path:"),
             verbatimTextOutput("resolved_svg_path"),
             tags$p(class = "sopi-note", "Export size for this saved SVG, in millimetres."),
             fluidRow(
-              column(6, numericInput("width", "Width (mm)", value = 230, min = 30, step = 5)),
-              column(6, numericInput("height", "Height (mm)", value = 130, min = 30, step = 5))
+              column(6, numericInput("width", "Width (mm)", value = app_defaults$width, min = 30, step = 5)),
+              column(6, numericInput("height", "Height (mm)", value = app_defaults$height, min = 30, step = 5))
             ),
             tags$p(class = "sopi-note", "Plot ID and data source ID are generated from the SVG filename."),
             verbatimTextOutput("derived_config_ids"),
-            checkboxInput("update_chart_config", "Update release chart_config.xlsx", value = TRUE),
+            checkboxInput("update_chart_config", "Update release chart_config.xlsx", value = app_defaults$update_chart_config),
             tags$p(class = "sopi-note", "Existing matching IDs are updated; new IDs are appended."),
             verbatimTextOutput("config_path_preview"),
             actionButton("save_svg", "Save Confirmed Chart", class = "btn-success"),
@@ -2137,6 +2226,61 @@ server <- function(input, output, session) {
   output_refresh <- reactiveVal(0)
   palette_refresh <- reactiveVal(0)
   last_auto_forecast_years <- reactiveVal(NULL)
+  source_data <- reactiveVal(NULL)
+  loaded_data <- reactiveVal(NULL)
+  data_message <- reactiveVal(NULL)
+
+  observeEvent(input$reset_overview_defaults, {
+    updateSelectInput(session, "sector", selected = app_defaults$sector)
+    updateNumericInput(session, "release_year", value = app_defaults$release_year)
+    updateSelectInput(session, "release_round", selected = app_defaults$release_round)
+    updateTextInput(session, "releases_root", value = default_releases_root(project_root))
+    updateTextInput(session, "manual_data_workbook_template", value = app_defaults$manual_data_workbook_template)
+    updateCheckboxInput(session, "confirm_delete_output", value = FALSE)
+    output$output_file_status <- renderText("")
+    output_refresh(output_refresh() + 1)
+  })
+
+  observeEvent(input$reset_data_defaults, {
+    updateRadioButtons(session, "data_source_type", selected = app_defaults$data_source_type)
+    updateSelectInput(session, "data_function", selected = app_defaults$data_function)
+    updateCheckboxInput(session, "use_release_sector_workbook", value = app_defaults$use_release_sector_workbook)
+    updateTextInput(session, "excel_path", value = app_defaults$excel_path)
+    updateTextInput(session, "excel_range", value = app_defaults$excel_range)
+    updateNumericInput(session, "transform_step_count", value = app_defaults$transform_step_count)
+    updateSelectInput(session, "transform_function_1", selected = "none")
+    if (!is_blank(app_defaults$data_function)) {
+      reset_function_argument_inputs(session, app_defaults$data_function, "data_arg", data_standard_exclusions())
+    }
+    source_data(NULL)
+    loaded_data(NULL)
+    data_message("Data controls reset. Load data to preview it.")
+  })
+
+  observeEvent(input$reset_style_defaults, {
+    updateTextInput(session, "font_family", value = app_defaults$font_family)
+    updateNumericInput(session, "base_size", value = app_defaults$base_size)
+  })
+
+  observeEvent(input$reset_chart_defaults, {
+    default_plot <- app_defaults$plot_function
+    updateSelectInput(session, "plot_function", selected = default_plot)
+    updateSelectInput(session, "palette_mode", selected = app_defaults$palette_mode)
+    updateTextInput(session, "custom_palette_name", value = app_defaults$custom_palette_name)
+    updateTextAreaInput(session, "custom_palette_text", value = app_defaults$custom_palette_text)
+    updateTextInput(session, "output_folder_template", value = app_defaults$output_folder_template)
+    updateTextInput(session, "output_file", value = app_defaults$output_file)
+    updateNumericInput(session, "width", value = app_defaults$width)
+    updateNumericInput(session, "height", value = app_defaults$height)
+    updateCheckboxInput(session, "update_chart_config", value = app_defaults$update_chart_config)
+    updateTextAreaInput(session, "plot_extra_args", value = app_defaults$plot_extra_args)
+    if (!is_blank(default_plot)) {
+      reset_chart_registry_inputs(session, default_plot, loaded_data())
+      reset_function_argument_inputs(session, default_plot, "plot_arg", plot_standard_exclusions())
+    }
+    output$palette_status <- renderText("")
+    output$save_status <- renderText("")
+  })
   
   metadata_resource <- reactive({
     palette_refresh()
@@ -2647,10 +2791,6 @@ server <- function(input, output, session) {
     )
   })
   
-  source_data <- reactiveVal(NULL)
-  loaded_data <- reactiveVal(NULL)
-  data_message <- reactiveVal(NULL)
-
   observeEvent(input$load_data, {
     result <- tryCatch(
       {
@@ -2714,12 +2854,19 @@ server <- function(input, output, session) {
     }
 
     data <- loaded_data()
+    if (is.null(data)) {
+      cat("No data loaded.")
+      return(invisible(NULL))
+    }
+
     cat(nrow(data), "rows x", ncol(data), "columns\n")
     cat(paste(names(data), collapse = ", "))
   })
   
   output$data_preview <- renderTable({
-    utils::head(loaded_data(), 10)
+    data <- loaded_data()
+    if (is.null(data)) return(NULL)
+    utils::head(data, 10)
   })
   
   output$field_selectors <- renderUI({
