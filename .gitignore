@@ -6,7 +6,7 @@ work/
 .Rhistory
 .RData
 .Ruserdata
-.Renviron.local
+.Renviron
 ~$*.xlsx
 ~$*.xlsm
 .Rproj.user

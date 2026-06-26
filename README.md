@@ -200,15 +200,23 @@ The shared config stores the portable equivalent:
 {SOPI_RELEASES_ROOT}/{year}/{release}/Graphs/{sector}
 ```
 
-To make the app default to your SharePoint-synced folder every time it starts, create a local file named `.Renviron.local` in the project root:
+To make the app default to your SharePoint-synced folder every time it starts, add `SOPI_RELEASES_ROOT` to your existing `.Renviron` file in the project root.
+
+Use `~` to make the user folder dynamic. R expands `~` to the current user's home folder:
 
 ```text
-SOPI_RELEASES_ROOT="C:/Users/<you>/SharePoint/SOPI_releases"
+SOPI_RELEASES_ROOT="~/SharePoint/SOPI_releases"
 ```
 
-There is an example file at `.Renviron.local.example`. The real `.Renviron.local` file is ignored by Git because it is different for each user.
+On Windows you can also use:
 
-`run_shiny_app.R`, `run_charts.R`, and `run_release_report.R` all load `.Renviron.local` automatically. The Shiny app also sets `SOPI_RELEASES_ROOT` for the current R session when a user changes `Local SOPI releases root` in the Overview tab.
+```text
+SOPI_RELEASES_ROOT="${USERPROFILE}/SharePoint/SOPI_releases"
+```
+
+The real `.Renviron` file is ignored by Git because it is different for each user.
+
+`run_shiny_app.R`, `run_charts.R`, and `run_release_report.R` all load `.Renviron` automatically. The Shiny app also sets `SOPI_RELEASES_ROOT` for the current R session when a user changes `Local SOPI releases root` in the Overview tab.
 
 Manual Excel data should normally live in a SharePoint-synced data folder, organised as one workbook per sector and release:
 
@@ -268,7 +276,7 @@ config/chart_config.xlsx
 To run a release-specific config from a terminal:
 
 ```sh
-$env:SOPI_RELEASES_ROOT = "C:\Users\<you>\SharePoint\SOPI_releases"
+$env:SOPI_RELEASES_ROOT = "$HOME\SharePoint\SOPI_releases"
 Rscript run_charts.R config/releases/2026/June/chart_config.xlsx
 ```
 
@@ -281,13 +289,13 @@ Rscript run_release_report.R 2026 June
 By default, the report runner uses the same local releases root as the app:
 
 ```text
-C:/Users/<you>/Documents/outputs/SOPI_releases
+~/Documents/outputs/SOPI_releases
 ```
 
 If your SharePoint-synced release folder is somewhere else, pass it as the third argument:
 
 ```sh
-Rscript run_release_report.R 2026 June "C:/Users/<you>/SharePoint/SOPI_releases"
+Rscript run_release_report.R 2026 June "~/SharePoint/SOPI_releases"
 ```
 
 Quarto must be installed and available on `PATH` to render the HTML file. If Quarto is not available, the project still writes the `.qmd` report file in the release `Report` folder.
@@ -310,7 +318,7 @@ Rscript run_release_report.R config/releases/2026/June/chart_config.xlsx
 With a direct config path, pass a custom releases root as the second argument:
 
 ```sh
-Rscript run_release_report.R config/releases/2026/June/chart_config.xlsx "C:/Users/<you>/SharePoint/SOPI_releases"
+Rscript run_release_report.R config/releases/2026/June/chart_config.xlsx "~/SharePoint/SOPI_releases"
 ```
 
 If there is only one release config under `config/releases/`, this also works:
@@ -329,7 +337,7 @@ diagnose_release_report_files("config/releases/2026/June/chart_config.xlsx")
 You can also run a release-specific config from R:
 
 ```r
-Sys.setenv(SOPI_RELEASES_ROOT = "C:/Users/<you>/SharePoint/SOPI_releases")
+Sys.setenv(SOPI_RELEASES_ROOT = "~/SharePoint/SOPI_releases")
 Sys.setenv(AUTOSOPI_CONFIG = "config/releases/2026/June/chart_config.xlsx")
 source("run_charts.R")
 ```
