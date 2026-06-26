@@ -1169,12 +1169,12 @@ optional_choices <- function(data) {
 default_releases_root <- function(project_root) {
   env_root <- Sys.getenv("SOPI_RELEASES_ROOT", unset = "")
   if (nzchar(trimws(env_root))) {
-    return(normalizePath(env_root, winslash = "/", mustWork = FALSE))
+    return(normalizePath(expand_user_path(env_root), winslash = "/", mustWork = FALSE))
   }
   
   user_profile <- Sys.getenv("USERPROFILE", unset = "")
   if (nzchar(trimws(user_profile))) {
-    return(normalizePath(file.path(user_profile, "Documents", "outputs", "SOPI_releases"), winslash = "/", mustWork = FALSE))
+    return(normalizePath(file.path(expand_user_path(user_profile), "Documents", "outputs", "SOPI_releases"), winslash = "/", mustWork = FALSE))
   }
   
   normalizePath(file.path(project_root, "SOPI_releases"), winslash = "/", mustWork = FALSE)
@@ -1204,12 +1204,24 @@ is_absolute_path <- function(path) {
   grepl("^([A-Za-z]:|/|\\\\\\\\)", path)
 }
 
+expand_user_path <- function(path) {
+  if (is.null(path) || !nzchar(trimws(path))) return(path)
+
+  path <- as.character(path)
+  user_profile <- Sys.getenv("USERPROFILE", unset = "")
+  if (nzchar(trimws(user_profile))) {
+    path <- sub("^~(?=$|[/\\\\])", gsub("\\\\", "/", user_profile), path, perl = TRUE)
+  }
+
+  path.expand(path)
+}
+
 resolve_output_base_path <- function(project_root, path) {
   if (is.null(path) || !nzchar(trimws(path))) {
     return(normalizePath(file.path(project_root, "outputs"), winslash = "/", mustWork = FALSE))
   }
   
-  path <- trimws(path)
+  path <- expand_user_path(trimws(path))
   
   if (is_absolute_path(path)) {
     normalizePath(path, winslash = "/", mustWork = FALSE)
@@ -2305,7 +2317,7 @@ server <- function(input, output, session) {
   
   observeEvent(list(input$releases_root, input$output_folder_template, input$manual_data_workbook_template), {
     if (!is.null(input$releases_root) && nzchar(trimws(input$releases_root))) {
-      Sys.setenv(SOPI_RELEASES_ROOT = normalizePath(input$releases_root, winslash = "/", mustWork = FALSE))
+      Sys.setenv(SOPI_RELEASES_ROOT = normalizePath(expand_user_path(input$releases_root), winslash = "/", mustWork = FALSE))
     }
     output_refresh(output_refresh() + 1)
   })

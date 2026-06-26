@@ -17,6 +17,18 @@ is_absolute_path <- function(path) {
   !is_blank(path) && grepl("^([A-Za-z]:|/|\\\\\\\\)", path)
 }
 
+expand_user_path <- function(path) {
+  if (is_blank(path)) return(path)
+
+  path <- as.character(path)
+  user_profile <- Sys.getenv("USERPROFILE", unset = "")
+  if (nzchar(trimws(user_profile))) {
+    path <- sub("^~(?=$|[/\\\\])", gsub("\\\\", "/", user_profile), path, perl = TRUE)
+  }
+
+  path.expand(path)
+}
+
 path_context_value <- function(context, name) {
   value <- context[[name]]
   if (is.null(value) || length(value) == 0 || is.na(value)) "" else as.character(value[[1]])
@@ -43,7 +55,7 @@ render_path_template <- function(path, context = list()) {
 
 sopi_releases_root <- function() {
   root <- Sys.getenv("SOPI_RELEASES_ROOT", unset = "")
-  if (is_blank(root)) NULL else root
+  if (is_blank(root)) NULL else expand_user_path(root)
 }
 
 resolve_project_path <- function(project_root, path, context = list()) {
@@ -59,6 +71,8 @@ resolve_project_path <- function(project_root, path, context = list()) {
 
     path <- gsub("\\{SOPI_RELEASES_ROOT\\}", root, path)
   }
+
+  path <- expand_user_path(path)
 
   if (is_absolute_path(path)) path else file.path(project_root, path)
 }
