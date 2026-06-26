@@ -40,8 +40,18 @@ relative_report_path <- function(path, report_dir) {
   paste(c(up, down), collapse = "/")
 }
 
+as_report_text <- function(x) {
+  if (is.null(x) || length(x) == 0) {
+    return("")
+  }
+
+  x <- as.character(x)
+  x[is.na(x)] <- ""
+  x
+}
+
 markdown_escape <- function(x) {
-  x <- as.character(x %||% "")
+  x <- as_report_text(x)
   x <- gsub("\\\\", "\\\\\\\\", x)
   x <- gsub("\\[", "\\\\[", x)
   x <- gsub("\\]", "\\\\]", x)
@@ -49,7 +59,7 @@ markdown_escape <- function(x) {
 }
 
 markdown_table_escape <- function(x) {
-  x <- as.character(x %||% "")
+  x <- as_report_text(x)
   x <- gsub("\\|", "\\\\|", x)
   x <- gsub("\r?\n", "<br>", x)
   markdown_escape(x)
