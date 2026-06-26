@@ -42,7 +42,7 @@ release_config_candidates <- function(project_root) {
 default_releases_root <- function(project_root) {
   user_profile <- Sys.getenv("USERPROFILE", unset = "")
   if (nzchar(trimws(user_profile))) {
-    return(normalizePath(file.path(user_profile, "Documents", "outputs", "SOPI_releases"), winslash = "/", mustWork = FALSE))
+    return(normalizePath(file.path(expand_user_path(user_profile), "Documents", "outputs", "SOPI_releases"), winslash = "/", mustWork = FALSE))
   }
 
   normalizePath(file.path(project_root, "SOPI_releases"), winslash = "/", mustWork = FALSE)
@@ -61,7 +61,7 @@ set_report_releases_root <- function(args, project_root) {
     root <- default_releases_root(project_root)
   }
 
-  Sys.setenv(SOPI_RELEASES_ROOT = normalizePath(root, winslash = "/", mustWork = FALSE))
+  Sys.setenv(SOPI_RELEASES_ROOT = normalizePath(expand_user_path(root), winslash = "/", mustWork = FALSE))
 }
 
 resolve_report_config_path <- function(args, project_root) {
