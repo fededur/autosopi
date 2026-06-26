@@ -164,10 +164,22 @@ transform_function_names <- transform_function_names[
   vapply(transform_function_names, is_user_facing_transform_function, logical(1))
 ]
 
+env_integer <- function(name, fallback) {
+  value <- Sys.getenv(name, unset = "")
+  value <- suppressWarnings(as.integer(value))
+  if (length(value) == 0 || is.na(value)) fallback else value
+}
+
+env_choice <- function(name, choices, fallback) {
+  value <- Sys.getenv(name, unset = "")
+  matched <- choices[tolower(choices) == tolower(trimws(value))]
+  if (length(matched) == 0) fallback else matched[[1]]
+}
+
 app_defaults <- list(
   sector = "Seafood",
-  release_year = as.integer(format(Sys.Date(), "%Y")),
-  release_round = "June",
+  release_year = env_integer("SOPI_RELEASE_YEAR", as.integer(format(Sys.Date(), "%Y"))),
+  release_round = env_choice("SOPI_RELEASE_ROUND", c("June", "December"), "June"),
   manual_data_workbook_template = "{year}/{release}/Data/{sector}/{sector}.xlsx",
   output_folder_template = "{year}/{release}/Graphs/{sector}",
   font_family = "DIN",
