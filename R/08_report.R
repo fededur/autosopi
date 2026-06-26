@@ -48,6 +48,13 @@ markdown_escape <- function(x) {
   x
 }
 
+markdown_table_escape <- function(x) {
+  x <- as.character(x %||% "")
+  x <- gsub("\\|", "\\\\|", x)
+  x <- gsub("\r?\n", "<br>", x)
+  markdown_escape(x)
+}
+
 markdown_path <- function(path) {
   gsub(" ", "%20", gsub("\\\\", "/", path), fixed = TRUE)
 }
@@ -69,6 +76,82 @@ figure_caption <- function(row) {
   }
 
   markdown_escape(caption)
+}
+
+format_report_param_value <- function(value) {
+  if (is.null(value) || length(value) == 0) return(NA_character_)
+  if (length(value) > 1) {
+    if (!is.null(names(value)) && any(nzchar(names(value)))) {
+      return(paste(paste(names(value), unname(value), sep = " = "), collapse = "\n"))
+    }
+    return(paste(value, collapse = ", "))
+  }
+
+  as.character(value[[1]])
+}
+
+plot_parameter_rows <- function(job, resolved) {
+  plot_args <- resolved$plot_args
+  display_args <- c(
+    list(
+      plot_id = job$plot_id,
+      plot_function = job$plot_function,
+      output_file = job$output_file,
+      title = job$title,
+      subtitle = job$subtitle
+    ),
+    plot_args
+  )
+
+  hidden <- c(
+    "active",
+    "notes",
+    "sort_order",
+    "source_type",
+    "source_ref",
+    "sheet",
+    "range",
+    "data_function",
+    "cache",
+    "setting_name",
+    "setting_value",
+    "setting_type",
+    "dry_run",
+    "run_all_active",
+    "sector_filter",
+    "plot_id_filter",
+    "save_logs",
+    "overwrite",
+    "dpi"
+  )
+
+  display_args <- display_args[setdiff(names(display_args), hidden)]
+  values <- vapply(display_args, format_report_param_value, character(1))
+  keep <- !is.na(values) & nzchar(trimws(values))
+
+  data.frame(
+    parameter = names(values)[keep],
+    value = unname(values[keep]),
+    stringsAsFactors = FALSE
+  )
+}
+
+parameter_table_markdown <- function(params) {
+  if (is.null(params) || nrow(params) == 0) {
+    return(character())
+  }
+
+  rows <- c(
+    "| Parameter | Value |",
+    "|---|---|",
+    sprintf(
+      "| %s | %s |",
+      markdown_table_escape(params$parameter),
+      markdown_table_escape(params$value)
+    )
+  )
+
+  c("**Plot parameters**", "", rows, "")
 }
 
 build_release_report_plan <- function(config, project_root) {
@@ -102,6 +185,7 @@ build_release_report_plan <- function(config, project_root) {
       output_file = as.character(job$output_file),
       output_path = normalise_report_path(output_path),
       exists = file.exists(output_path),
+      params = I(list(plot_parameter_rows(job, resolved))),
       stringsAsFactors = FALSE
     )
   })
@@ -136,6 +220,10 @@ write_release_report_qmd <- function(report_plan, report_dir, release_year, rele
     "figure { margin-bottom: 36px; }",
     "figcaption { margin-top: 8px; color: #555; font-size: 0.95em; }",
     "img { max-width: 100%; height: auto; }",
+    ".figure-block { margin: 0 0 72px 0; padding-bottom: 44px; border-bottom: 8px solid #eef1f4; }",
+    ".figure-block table { margin-top: 12px; font-size: 0.9em; width: 100%; }",
+    ".figure-block th { background: #f3f5f7; }",
+    ".figure-block td:first-child { width: 28%; font-weight: 600; }",
     "</style>",
     ""
   )
@@ -155,7 +243,12 @@ write_release_report_qmd <- function(report_plan, report_dir, release_year, rele
       image_path <- markdown_path(relative_report_path(row$output_path, report_dir))
       lines <- c(
         lines,
+        "::: {.figure-block}",
+        "",
         sprintf("![%s](%s)", figure_caption(row), image_path),
+        "",
+        parameter_table_markdown(row$params[[1]]),
+        ":::",
         ""
       )
     }

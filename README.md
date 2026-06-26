@@ -279,7 +279,7 @@ The report is written beside the release `Graphs` folder:
 <SOPI releases root>/2026/June/Report/sopi_release_figures.html
 ```
 
-The report includes only SVG files that exist in the release output folders. It starts a new page for each sector and places the sector figures in config order with captions.
+The report includes only SVG files that exist in the release output folders. It starts a new page for each sector and places the sector figures in config order with captions. Each figure block also includes a small table of the plot parameters used to create the figure.
 
 You can also pass the config path directly:
 
