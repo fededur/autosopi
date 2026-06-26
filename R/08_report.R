@@ -161,7 +161,15 @@ parameter_table_markdown <- function(params) {
     )
   )
 
-  c("**Plot parameters**", "", rows, "")
+  c(
+    "<details class=\"parameter-details\">",
+    "<summary>Show plot parameters</summary>",
+    "",
+    rows,
+    "",
+    "</details>",
+    ""
+  )
 }
 
 build_release_report_plan <- function(config, project_root) {
@@ -234,6 +242,10 @@ write_release_report_qmd <- function(report_plan, report_dir, release_year, rele
     ".figure-block table { margin-top: 12px; font-size: 0.9em; width: 100%; }",
     ".figure-block th { background: #f3f5f7; }",
     ".figure-block td:first-child { width: 28%; font-weight: 600; }",
+    ".parameter-details { margin-top: 12px; max-width: 100%; }",
+    ".parameter-details summary { cursor: pointer; display: inline-block; padding: 6px 10px; border: 1px solid #ccd3da; border-radius: 4px; background: #f7f9fb; color: #334; font-size: 0.9em; font-weight: 600; }",
+    ".parameter-details[open] summary { margin-bottom: 10px; background: #eef3f7; }",
+    ".parameter-details table { display: block; max-height: 260px; overflow: auto; border: 1px solid #e2e6ea; }",
     "</style>",
     ""
   )
