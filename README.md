@@ -200,7 +200,15 @@ The shared config stores the portable equivalent:
 {SOPI_RELEASES_ROOT}/{year}/{release}/Graphs/{sector}
 ```
 
-To run charts from `run_charts.R`, each user should set `SOPI_RELEASES_ROOT` to their own synced SharePoint root before running a release config. The Shiny app sets this for the current R session from `Local SOPI releases root`.
+To make the app default to your SharePoint-synced folder every time it starts, create a local file named `.Renviron.local` in the project root:
+
+```text
+SOPI_RELEASES_ROOT="C:/Users/<you>/SharePoint/SOPI_releases"
+```
+
+There is an example file at `.Renviron.local.example`. The real `.Renviron.local` file is ignored by Git because it is different for each user.
+
+`run_shiny_app.R`, `run_charts.R`, and `run_release_report.R` all load `.Renviron.local` automatically. The Shiny app also sets `SOPI_RELEASES_ROOT` for the current R session when a user changes `Local SOPI releases root` in the Overview tab.
 
 Manual Excel data should normally live in a SharePoint-synced data folder, organised as one workbook per sector and release:
 
@@ -309,6 +317,13 @@ If there is only one release config under `config/releases/`, this also works:
 
 ```sh
 Rscript run_release_report.R
+```
+
+If the report says no SVG files were found, check the paths it expects from R:
+
+```r
+source("R/08_report.R")
+diagnose_release_report_files("config/releases/2026/June/chart_config.xlsx")
 ```
 
 You can also run a release-specific config from R:

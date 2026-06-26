@@ -172,7 +172,7 @@ parameter_table_markdown <- function(params) {
   )
 }
 
-build_release_report_plan <- function(config, project_root) {
+build_release_report_plan <- function(config, project_root, existing_only = TRUE) {
   run_plan <- build_run_plan(config)
   if (nrow(run_plan) == 0) {
     stop("No active plots found in the release config.", call. = FALSE)
@@ -208,9 +208,38 @@ build_release_report_plan <- function(config, project_root) {
     )
   })
 
-  dplyr::bind_rows(rows) |>
-    dplyr::filter(.data$exists) |>
+  report_plan <- dplyr::bind_rows(rows) |>
     dplyr::arrange(.data$sector, .data$sort_order, .data$plot_id)
+
+  if (isTRUE(existing_only)) {
+    report_plan <- report_plan |>
+      dplyr::filter(.data$exists)
+  }
+
+  report_plan
+}
+
+missing_svg_message <- function(report_plan) {
+  checked <- report_plan |>
+    dplyr::mutate(
+      status = ifelse(.data$exists, "found", "missing"),
+      line = paste0(.data$status, " | ", .data$sector, " | ", .data$plot_id, " | ", .data$output_path)
+    ) |>
+    dplyr::pull(.data$line)
+
+  checked <- utils::head(checked, 20)
+
+  paste(
+    c(
+      "No existing SVG files were found for active plots in the release config.",
+      "",
+      "The report looked for files such as:",
+      checked,
+      "",
+      "Check that SOPI_RELEASES_ROOT points to the local SharePoint folder that contains the release Graphs folder, and that charts have been generated for this release."
+    ),
+    collapse = "\n"
+  )
 }
 
 write_release_report_qmd <- function(report_plan, report_dir, release_year, release_round) {
@@ -304,10 +333,12 @@ render_release_report <- function(qmd_path) {
 build_release_figure_report <- function(config_path, project_root = getwd(), render = TRUE) {
   config <- read_chart_config(config_path)
   global <- settings_from_table(config$release_settings)
-  report_plan <- build_release_report_plan(config, project_root)
+  all_report_paths <- build_release_report_plan(config, project_root, existing_only = FALSE)
+  report_plan <- all_report_paths |>
+    dplyr::filter(.data$exists)
 
   if (nrow(report_plan) == 0) {
-    stop("No existing SVG files were found for active plots in the release config.", call. = FALSE)
+    stop(missing_svg_message(all_report_paths), call. = FALSE)
   }
 
   report_dir <- release_report_dir_from_graph(report_plan$output_path[[1]])
@@ -326,4 +357,10 @@ build_release_figure_report <- function(config_path, project_root = getwd(), ren
     html_path = html_path,
     figures = report_plan
   )
+}
+
+diagnose_release_report_files <- function(config_path, project_root = getwd()) {
+  config <- read_chart_config(config_path)
+  build_release_report_plan(config, project_root, existing_only = FALSE) |>
+    dplyr::select(.data$sector, .data$plot_id, .data$output_file, .data$output_path, .data$exists)
 }

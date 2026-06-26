@@ -1,5 +1,10 @@
 project_root <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 
+local_env <- file.path(project_root, ".Renviron.local")
+if (file.exists(local_env)) {
+  readRenviron(local_env)
+}
+
 source(file.path(project_root, "R", "00_packages.R"))
 source(file.path(project_root, "R", "01_utils.R"))
 source(file.path(project_root, "R", "02_styling.R"))
