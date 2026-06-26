@@ -270,6 +270,18 @@ After the SVGs have been generated, build a release figure report with Quarto:
 Rscript run_release_report.R 2026 June
 ```
 
+By default, the report runner uses the same local releases root as the app:
+
+```text
+C:/Users/<you>/Documents/outputs/SOPI_releases
+```
+
+If your SharePoint-synced release folder is somewhere else, pass it as the third argument:
+
+```sh
+Rscript run_release_report.R 2026 June "C:/Users/<you>/SharePoint/SOPI_releases"
+```
+
 Quarto must be installed and available on `PATH` to render the HTML file. If Quarto is not available, the project still writes the `.qmd` report file in the release `Report` folder.
 
 The report is written beside the release `Graphs` folder:
@@ -285,6 +297,12 @@ You can also pass the config path directly:
 
 ```sh
 Rscript run_release_report.R config/releases/2026/June/chart_config.xlsx
+```
+
+With a direct config path, pass a custom releases root as the second argument:
+
+```sh
+Rscript run_release_report.R config/releases/2026/June/chart_config.xlsx "C:/Users/<you>/SharePoint/SOPI_releases"
 ```
 
 If there is only one release config under `config/releases/`, this also works:
